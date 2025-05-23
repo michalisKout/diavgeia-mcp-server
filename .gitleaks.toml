@@ -1,0 +1,36 @@
+# Gitleaks configuration for diavgeia-mcp-server
+# Documentation: https://github.com/gitleaks/gitleaks
+
+title = "Gitleaks Configuration for Diavgeia MCP Server"
+
+# Extend the default gitleaks config
+[extend]
+useDefault = true
+
+# Additional allowlist paths
+[allowlist]
+description = "Allowlisted files"
+paths = [
+  '''^\.env\.example$''',
+  '''^.*\.md$''',
+  '''^.*\.d\.ts$''',
+  '''^verify-security\.sh$''',
+  '''^SECURITY.*\.md$''',
+  '''^\.github/.*\.md$''',
+  '''^docs/.*\.md$''',
+]
+
+# Allowlist for specific strings that are not secrets
+regexes = [
+  '''example-api-key''',
+  '''your-api-key''',
+  '''YOUR_API_KEY''',
+  '''<your-''',
+  '''<API_KEY>''',
+]
+
+# Custom rules can be added here if needed
+# [[rules]]
+# id = "custom-rule"
+# description = "Custom secret detection rule"
+# regex = '''your-pattern-here'''

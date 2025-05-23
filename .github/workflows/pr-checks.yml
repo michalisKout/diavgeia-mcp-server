@@ -1,0 +1,52 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  build-and-lint:
+    name: Build, Type Check & Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          node-version: "23"
+
+      - name: Run TypeScript type check
+        run: pnpm run check
+
+      - name: Run linter
+        run: pnpm run lint
+
+      - name: Build local version
+        run: pnpm run build:local
+
+      - name: Check for build artifacts
+        run: |
+          if [ ! -f "dist/local.js" ]; then
+            echo "❌ Build failed: dist/local.js not found"
+            exit 1
+          fi
+          echo "✅ Build successful: dist/local.js created"
+  summary:
+    name: PR Check Summary
+    runs-on: ubuntu-latest
+    needs: [build-and-lint]
+    if: always()
+
+    steps:
+      - name: Check all jobs
+        run: |
+          if [ "${{ needs.build-and-lint.result }}" != "success" ]; then
+            echo "❌ Some checks failed"
+            exit 1
+          fi
+          echo "✅ All checks passed!"

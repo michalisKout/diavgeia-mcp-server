@@ -1,0 +1,38 @@
+# Lefthook configuration for diavgeia-mcp-server
+# https://github.com/evilmartians/lefthook
+
+# Pre-commit hooks
+pre-commit:
+  parallel: true
+  commands:
+    # Lint staged files with Biome
+    lint:
+      glob: "*.{js,ts,json}"
+      run: pnpm biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+      stage_fixed: true
+
+    # Type check TypeScript files
+    type-check:
+      glob: "*.{ts}"
+      run: pnpm run type-check
+
+# Commit-msg hooks
+commit-msg:
+  commands:
+    # Validate commit message format
+    commitlint:
+      run: pnpm commitlint --edit {1}
+
+# Pre-push hooks
+pre-push:
+  parallel: false
+  commands:
+    # Run all checks before pushing
+    check:
+      run: pnpm run check
+
+    # Run build to ensure it succeeds
+    build:
+      run: pnpm run build:local
+# Optional: Skip hooks by using LEFTHOOK=0 git commit
+# Example: LEFTHOOK=0 git commit -m "wip: work in progress"

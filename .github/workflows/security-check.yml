@@ -1,0 +1,183 @@
+name: Security Check
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # Run security checks weekly on Monday at 9:00 AM UTC
+    - cron: "0 9 * * 1"
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  security-scan:
+    name: Security Verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for git log checks
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          node-version: "23"
+
+      - name: Check for sensitive files
+        run: |
+          echo "🔍 Checking for sensitive files in repository..."
+
+          # Check if any .env files are committed
+          if git ls-files | grep -E "\.env$|\.env\.local$"; then
+            echo "❌ ERROR: .env files found in repository!"
+            exit 1
+          fi
+
+          # Check if .wrangler directory is committed
+          if git ls-files | grep -E "\.wrangler/"; then
+            echo "❌ ERROR: .wrangler directory found in repository!"
+            exit 1
+          fi
+
+          # Check if .dev.vars is committed
+          if git ls-files | grep -E "\.dev\.vars"; then
+            echo "❌ ERROR: .dev.vars file found in repository!"
+            exit 1
+          fi
+
+          echo "✅ No sensitive files found in repository"
+
+      - name: Scan for hardcoded secrets
+        run: |
+          echo "🔍 Scanning for hardcoded secrets..."
+
+          # Search for common secret patterns (excluding safe files)
+          if git grep -i -E "api[_-]?key\s*=\s*['\"][a-zA-Z0-9]{20,}" -- ':!.env.example' ':!*.md' ':!*.d.ts' ':!verify-security.sh'; then
+            echo "❌ ERROR: Potential hardcoded API key found!"
+            exit 1
+          fi
+
+          if git grep -i -E "secret[_-]?key\s*=\s*['\"][a-zA-Z0-9]{20,}" -- ':!.env.example' ':!*.md' ':!*.d.ts' ':!verify-security.sh'; then
+            echo "❌ ERROR: Potential hardcoded secret found!"
+            exit 1
+          fi
+
+          if git grep -E "sk-[a-zA-Z0-9]{40,}" -- ':!.env.example' ':!*.md' ':!.gitignore'; then
+            echo "❌ ERROR: Potential OpenAI API key found!"
+            exit 1
+          fi
+
+          if git grep -E "ghp_[a-zA-Z0-9]{36,}" -- ':!.env.example' ':!*.md'; then
+            echo "❌ ERROR: Potential GitHub token found!"
+            exit 1
+          fi
+
+          echo "✅ No hardcoded secrets detected"
+
+      - name: Verify .gitignore coverage
+        run: |
+          echo "🔍 Verifying .gitignore coverage..."
+
+          # Check that critical files/directories are ignored
+          SHOULD_BE_IGNORED=(".env" ".env.local" ".wrangler" ".dev.vars" "node_modules")
+
+          for item in "${SHOULD_BE_IGNORED[@]}"; do
+            if ! git check-ignore "$item" > /dev/null 2>&1; then
+              echo "❌ ERROR: $item is NOT in .gitignore!"
+              exit 1
+            fi
+            echo "✅ $item is properly ignored"
+          done
+
+  dependency-audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          node-version: "20"
+
+      - name: Run pnpm audit
+        run: |
+          echo "🔍 Running dependency audit..."
+          pnpm audit --audit-level=moderate || echo "⚠️ Vulnerabilities found - review required"
+
+      - name: Check for outdated dependencies
+        run: |
+          echo "🔍 Checking for outdated dependencies..."
+          pnpm outdated || echo "ℹ️ Some dependencies are outdated"
+
+  secret-scanning:
+    name: Secret Scanning (Gitleaks)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: false
+
+  codeql-analysis:
+    name: CodeQL Security Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  security-summary:
+    name: Security Check Summary
+    runs-on: ubuntu-latest
+    needs: [security-scan, dependency-audit, secret-scanning, codeql-analysis]
+    if: always()
+
+    steps:
+      - name: Check all security jobs
+        run: |
+          echo "📊 Security Check Results:"
+          echo "=========================="
+          echo "Security Scan: ${{ needs.security-scan.result }}"
+          echo "Dependency Audit: ${{ needs.dependency-audit.result }}"
+          echo "Secret Scanning: ${{ needs.secret-scanning.result }}"
+          echo "CodeQL Analysis: ${{ needs.codeql-analysis.result }}"
+          echo ""
+
+          if [ "${{ needs.security-scan.result }}" != "success" ]; then
+            echo "❌ Security scan failed!"
+            exit 1
+          fi
+
+          if [ "${{ needs.secret-scanning.result }}" != "success" ]; then
+            echo "❌ Secret scanning failed!"
+            exit 1
+          fi
+
+          if [ "${{ needs.codeql-analysis.result }}" != "success" ]; then
+            echo "⚠️ CodeQL analysis had issues"
+          fi
+
+          echo "✅ Security checks completed!"

@@ -1,0 +1,6 @@
+# CODEOWNERS file for diavgeia-mcp-server
+# These owners will be the default owners for everything in the repo.
+# They will be requested for review when someone opens a pull request.
+
+# Global owners
+* @michalisKout

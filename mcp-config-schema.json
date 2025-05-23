@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Diavgeia MCP Server Configuration",
+  "description": "Configuration schema for the Diavgeia MCP Server",
+  "type": "object",
+  "properties": {
+    "apiBaseUrl": {
+      "type": "string",
+      "description": "Base URL for the Diavgeia API",
+      "default": "https://diavgeia.gov.gr/api",
+      "format": "uri"
+    },
+    "defaultPageSize": {
+      "type": "number",
+      "description": "Default number of results per page for search queries",
+      "default": 10,
+      "minimum": 1,
+      "maximum": 500
+    },
+    "maxOrganizations": {
+      "type": "number",
+      "description": "Maximum number of organizations to display in context",
+      "default": 50,
+      "minimum": 10,
+      "maximum": 200
+    },
+    "defaultDateRange": {
+      "type": "string",
+      "description": "Default date range for searches (e.g., '1year', '6months', '3months')",
+      "default": "1year",
+      "enum": ["1month", "3months", "6months", "1year", "2years"]
+    },
+    "language": {
+      "type": "string",
+      "description": "Preferred language for responses (Greek or English)",
+      "default": "en",
+      "enum": ["el", "en"]
+    },
+    "timeout": {
+      "type": "number",
+      "description": "Request timeout in milliseconds",
+      "default": 30000,
+      "minimum": 5000,
+      "maximum": 120000
+    },
+    "cacheEnabled": {
+      "type": "boolean",
+      "description": "Enable caching of organization data",
+      "default": true
+    }
+  },
+  "additionalProperties": false
+}
