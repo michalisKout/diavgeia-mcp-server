@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build-and-test:
+    name: Build & Test (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [23.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Run TypeScript type check
+        run: pnpm run type-check
+
+      - name: Run Biome check
+        run: pnpm run check
+
+      - name: Build local version
+        run: pnpm run build:local
+
+      - name: Generate Cloudflare types
+        run: pnpm run cf-typegen
+
+      - name: Verify build artifacts
+        run: |
+          if [ ! -f "dist/index.js" ]; then
+            echo "❌ Build failed: dist/index.js not found"
+            exit 1
+          fi
+          echo "✅ Build successful: dist/index.js created"
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          node-version: "20"
+
+      - name: Audit dependencies
+        run: pnpm audit --audit-level moderate || echo "⚠️ Vulnerabilities found - review required"
+
+  ci-summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [build-and-test, security-audit]
+    if: always()
+
+    steps:
+      - name: Check all jobs
+        run: |
+          if [ "${{ needs.build-and-test.result }}" != "success" ] || [ "${{ needs.security-audit.result }}" != "success" ]; then
+            echo "❌ Some CI checks failed"
+            exit 1
+          fi
+          echo "✅ All CI checks passed!"
