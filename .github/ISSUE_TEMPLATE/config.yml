@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📚 Documentation
+    url: https://github.com/michalisKout/diavgeia-mcp-server#readme
+    about: Check our comprehensive documentation first
+  - name: 💬 Discussions
+    url: https://github.com/michalisKout/diavgeia-mcp-server/discussions
+    about: Ask questions and discuss ideas with the community
+  - name: 🌐 Diavgeia API Documentation
+    url: https://diavgeia.gov.gr/api/help
+    about: Official Diavgeia API documentation
+  - name: 📖 Model Context Protocol
+    url: https://modelcontextprotocol.io/
+    about: Learn more about the Model Context Protocol
