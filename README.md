@@ -5,7 +5,16 @@ A Model Context Protocol (MCP) server that provides access to Greek government t
 ## 🌟 Features
 
 - **Search Government Decisions**: Query decisions by keywords, date ranges, organization, and type
+<video controls width="400">
+  <source src="" type="video/mov" />
+</video>
+
+[MCP demo 📹](https://collection.cloudinary.com/dvyxq82nf/14ce145828a77c3312b4c4a94b3a4085)
+
 - **Retrieve Decision Details**: Get comprehensive information about specific decisions using their ADA (unique identifier)
+
+[MCP demo📹](https://collection.cloudinary.com/dvyxq82nf/2c240ecf9fb4d899ad81f11b5a2f4b34)
+
 - **Date-aware Queries**: Natural language date parsing (e.g., "last year", "January 2024")
 - **Organization Search**: Find decisions by ministry or government organization
 
