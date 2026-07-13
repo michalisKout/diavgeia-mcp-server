@@ -52,6 +52,20 @@ A Model Context Protocol (MCP) server that provides access to Greek government t
   node /Users/michaliskoutridis/dev/projects/ai-agents/diavgeia-mcp-server/dist/local.js
   ```
 
+## 🔧 Configuration
+
+No configuration is required. The server runs with sensible defaults and can be customized with either MCP config values or environment variables.
+
+| Option | Default | Environment variable |
+| --- | --- | --- |
+| `apiBaseUrl` | `https://diavgeia.gov.gr/opendata` | `DIAVGEIA_API_BASE_URL` (`DIAVGEIA_URL` is also supported) |
+| `defaultPageSize` | `10` | `DIAVGEIA_DEFAULT_PAGE_SIZE` |
+| `maxOrganizations` | `50` | `DIAVGEIA_MAX_ORGANIZATIONS` |
+| `defaultDateRange` | `1year` | `DIAVGEIA_DEFAULT_DATE_RANGE` |
+| `language` | `en` | `DIAVGEIA_LANGUAGE` |
+| `timeout` | `30000` | `DIAVGEIA_TIMEOUT` |
+| `cacheEnabled` | `true` | `DIAVGEIA_CACHE_ENABLED` |
+
 See [mcp-config-schema.json](./mcp-config-schema.json) for the full configuration schema.
 
 ## 🛠 Available Tools

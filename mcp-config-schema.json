@@ -6,47 +6,49 @@
   "properties": {
     "apiBaseUrl": {
       "type": "string",
-      "description": "Base URL for the Diavgeia API",
-      "default": "https://diavgeia.gov.gr/api",
-      "format": "uri"
+      "description": "Base URL for the Diavgeia API. Can also be set with DIAVGEIA_API_BASE_URL or the legacy DIAVGEIA_URL environment variable.",
+      "default": "https://diavgeia.gov.gr/opendata",
+      "format": "uri",
+      "examples": ["https://diavgeia.gov.gr/opendata"]
     },
     "defaultPageSize": {
       "type": "number",
-      "description": "Default number of results per page for search queries",
+      "description": "Default number of results per page for search queries. Can also be set with DIAVGEIA_DEFAULT_PAGE_SIZE.",
       "default": 10,
       "minimum": 1,
       "maximum": 500
     },
     "maxOrganizations": {
       "type": "number",
-      "description": "Maximum number of organizations to display in context",
+      "description": "Maximum number of organizations to display in context. Can also be set with DIAVGEIA_MAX_ORGANIZATIONS.",
       "default": 50,
       "minimum": 10,
       "maximum": 200
     },
     "defaultDateRange": {
       "type": "string",
-      "description": "Default date range for searches (e.g., '1year', '6months', '3months')",
+      "description": "Default date range for searches when the user does not provide dates. Can also be set with DIAVGEIA_DEFAULT_DATE_RANGE.",
       "default": "1year",
       "enum": ["1month", "3months", "6months", "1year", "2years"]
     },
     "language": {
       "type": "string",
-      "description": "Preferred language for responses (Greek or English)",
+      "description": "Preferred language for responses (Greek or English). Can also be set with DIAVGEIA_LANGUAGE.",
       "default": "en",
       "enum": ["el", "en"]
     },
     "timeout": {
       "type": "number",
-      "description": "Request timeout in milliseconds",
+      "description": "Request timeout in milliseconds. Can also be set with DIAVGEIA_TIMEOUT.",
       "default": 30000,
       "minimum": 5000,
       "maximum": 120000
     },
     "cacheEnabled": {
       "type": "boolean",
-      "description": "Enable caching of organization data",
-      "default": true
+      "description": "Enable caching of organization data. Can also be set with DIAVGEIA_CACHE_ENABLED.",
+      "default": true,
+      "examples": [true, false]
     }
   },
   "additionalProperties": false

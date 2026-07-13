@@ -1,5 +1,6 @@
 import axios from "axios";
 import dayjs from "dayjs";
+import { DEFAULT_CONFIG } from "../config.js";
 import {
   type DiavgeiaSearchParams,
   searchSchema,
@@ -10,17 +11,23 @@ import type {
   Organization,
 } from "../types/diavgeia.js";
 
-const API_BASE_URL =
-  process.env.DIAVGEIA_URL || "https://diavgeia.gov.gr/luminapi/api/";
+export interface DiavgeiaApiClientOptions {
+  baseUrl?: string;
+  timeout?: number;
+}
 
 export class DiavgeiaApiClient {
   private baseUrl: string;
   private client;
-  constructor(baseUrl = API_BASE_URL) {
-    this.baseUrl = baseUrl;
+
+  constructor(options: DiavgeiaApiClientOptions | string = {}) {
+    const resolvedOptions =
+      typeof options === "string" ? { baseUrl: options } : options;
+
+    this.baseUrl = resolvedOptions.baseUrl ?? DEFAULT_CONFIG.apiBaseUrl;
     this.client = axios.create({
       baseURL: this.baseUrl,
-      timeout: 10000,
+      timeout: resolvedOptions.timeout ?? DEFAULT_CONFIG.timeout,
       headers: {
         Accept: "application/json",
       },
@@ -99,9 +106,8 @@ export class DiavgeiaApiClient {
       }
 
       const response = await this.client.get(
-        `${this.baseUrl}/decisions/${ada}`
+        `${this.baseUrl}/decisions/${encodeURIComponent(ada)}`
       );
-      console.log("Diavgeia API response for getDecisionByAda:", response.data);
 
       return response.data;
     } catch (error) {
@@ -111,7 +117,11 @@ export class DiavgeiaApiClient {
         );
       }
 
-      throw new Error(`Αποτυχία λήψης απόφασης με ΑΔΑ ${ada}`);
+      throw new Error(
+        `Αποτυχία λήψης απόφασης με ΑΔΑ ${ada}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   }
 

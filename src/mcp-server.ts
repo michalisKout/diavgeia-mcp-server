@@ -1,10 +1,16 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { DiavgeiaApiClient } from "./api/diavgeia.js";
+import {
+  type DiavgeiaConfigOverrides,
+  type ResolvedDiavgeiaConfig,
+  loadConfig,
+} from "./config.js";
 import {
   GET_DECISIONS_TOOL_DESCRIPTION,
   GET_DECISIONS_TOOL_NAME,
 } from "./modules/decision/constants.js";
 import { decisionRawSchema } from "./modules/decision/schema.js";
-import { decisionTool } from "./modules/decision/tool.js";
+import { createDecisionTool } from "./modules/decision/tool.js";
 import {
   SEARCH_EXAMPLES_PROMPT,
   getSearchExamplesPrompt,
@@ -18,13 +24,16 @@ import {
   SEARCH_DECISIONS_TOOL_NAME,
 } from "./modules/search/constants.js";
 import { searchRawSchema } from "./modules/search/schema.js";
-import { searchDecisionsTool } from "./modules/search/tool.js";
+import { createSearchDecisionsTool } from "./modules/search/tool.js";
 import { BASE_PROMPT_EN } from "./prompts/template.js";
+import { OrganizationContext } from "./utils/context.js";
 
 export class DiavgeiaMCPServer {
   server: McpServer;
+  private config: ResolvedDiavgeiaConfig;
 
-  constructor() {
+  constructor(configOverrides?: DiavgeiaConfigOverrides) {
+    this.config = loadConfig(configOverrides);
     this.server = new McpServer({
       name: "diavgeia-mcp-server",
       version: "1.0.0",
@@ -41,7 +50,20 @@ export class DiavgeiaMCPServer {
     });
   }
 
-  async init() {
+  async init(configOverrides?: DiavgeiaConfigOverrides) {
+    if (configOverrides) {
+      this.config = loadConfig(configOverrides);
+    }
+
+    const apiClient = new DiavgeiaApiClient({
+      baseUrl: this.config.apiBaseUrl,
+      timeout: this.config.timeout,
+    });
+    const orgContext = new OrganizationContext(apiClient, {
+      cacheEnabled: this.config.cacheEnabled,
+      maxOrganizations: this.config.maxOrganizations,
+    });
+
     // Register tools with annotations for better MCP quality score
     this.server.registerTool(
       GET_DECISIONS_TOOL_NAME,
@@ -54,7 +76,7 @@ export class DiavgeiaMCPServer {
           destructiveHint: false,
         },
       },
-      decisionTool
+      createDecisionTool(apiClient)
     );
 
     this.server.registerTool(
@@ -68,12 +90,20 @@ export class DiavgeiaMCPServer {
           destructiveHint: false,
         },
       },
-      searchDecisionsTool
+      createSearchDecisionsTool({
+        apiClient,
+        orgContext,
+        config: this.config,
+      })
     );
 
     this.server.resource(
+      DIAVGEIA_API_RESOURCE.name,
       DIAVGEIA_API_RESOURCE.uri,
-      DIAVGEIA_API_RESOURCE.description,
+      {
+        description: DIAVGEIA_API_RESOURCE.description,
+        mimeType: DIAVGEIA_API_RESOURCE.mimeType,
+      },
       async () => ({
         contents: [
           {

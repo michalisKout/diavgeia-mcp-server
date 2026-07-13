@@ -1,4 +1,5 @@
 import { DiavgeiaApiClient } from "../api/diavgeia.js";
+import type { ResolvedDiavgeiaConfig } from "../config.js";
 import {
   NO_ORGANIZATIONS_FOUND,
   NO_ORGANIZATION_DATA,
@@ -7,14 +8,26 @@ import {
 import type { Organization } from "../types/diavgeia.js";
 import { normalizeQuery } from "./text.js";
 
-const MAX_ORGANIZATIONS = 50;
 export class OrganizationContext {
   private static instance: OrganizationContext;
   private organizations: Organization[] = [];
   private apiClient: DiavgeiaApiClient;
+  private maxOrganizations: number;
+  private cacheEnabled: boolean;
 
-  private constructor() {
-    this.apiClient = new DiavgeiaApiClient();
+  constructor(
+    apiClient = new DiavgeiaApiClient(),
+    config: Pick<
+      ResolvedDiavgeiaConfig,
+      "maxOrganizations" | "cacheEnabled"
+    > = {
+      maxOrganizations: 50,
+      cacheEnabled: true,
+    }
+  ) {
+    this.apiClient = apiClient;
+    this.maxOrganizations = config.maxOrganizations;
+    this.cacheEnabled = config.cacheEnabled;
   }
 
   public static getInstance(): OrganizationContext {
@@ -39,6 +52,10 @@ export class OrganizationContext {
   }
 
   public async getOrganizations(): Promise<Organization[]> {
+    if (!this.cacheEnabled) {
+      return await this.apiClient.getOrganizations();
+    }
+
     if (this.organizations.length === 0) {
       try {
         this.organizations = await this.apiClient.getOrganizations();
@@ -90,7 +107,7 @@ export class OrganizationContext {
   public async generateOrganizationContext(): Promise<string> {
     try {
       const organizations = await this.getOrganizations();
-      const topOrgs = organizations.slice(0, MAX_ORGANIZATIONS);
+      const topOrgs = organizations.slice(0, this.maxOrganizations);
 
       if (topOrgs.length === 0) return NO_ORGANIZATION_DATA;
 
