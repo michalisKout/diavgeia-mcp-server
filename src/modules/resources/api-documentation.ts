@@ -11,7 +11,7 @@ export const getApiDocumentation = () => `# Diavgeia API Documentation
 ## API Overview
 The Diavgeia (Transparency) API provides programmatic access to Greek government decisions and administrative acts.
 
-**Base URL:** \`https://test3.diavgeia.gov.gr/luminapi/opendata\`
+**Base URL:** \`https://diavgeia.gov.gr/opendata\`
 
 ---
 
@@ -20,7 +20,7 @@ The Diavgeia (Transparency) API provides programmatic access to Greek government
 **Purpose:** Search and filter government decisions based on multiple criteria
 
 **HTTP Method:** GET  
-**Endpoint:** \`/decisions/search\`
+**Endpoint:** \`/search\`
 
 ### Required Parameters
 None - all parameters are optional, but at least one search criterion is recommended
@@ -29,19 +29,17 @@ None - all parameters are optional, but at least one search criterion is recomme
 
 | Parameter | Type | Format | Description | Default | Example |
 |-----------|------|--------|-------------|---------|---------|
-| \`q\` | string | text | Search keywords for decision content | - | \`"education"\` |
-| \`from_date\` | string | YYYY-MM-DD | Start date for date range filter | 1 year ago | \`"2024-01-01"\` |
-| \`to_date\` | string | YYYY-MM-DD | End date for date range filter | today | \`"2024-12-31"\` |
-| \`org\` | string | numeric ID | Organization/Ministry identifier | - | \`"100001274"\` |
-| \`type\` | string | type code | Decision type classification | - | \`"Β.1.1"\` |
+| \`q\` | string | text/query expression | Main query. Can be free text or a fielded query like \`decisionType:"ΛΟΙΠΕΣ ΑΤΟΜΙΚΕΣ ΔΙΟΙΚΗΤΙΚΕΣ ΠΡΑΞΕΙΣ"\` | - | \`"εκπαίδευση"\` |
+| \`fq\` | string[] | fielded filter expression | Repeatable filter query, e.g. \`subject:"..."\`, \`organizationUid:"100081880"\`, \`issueDate:[2024-01-01 TO 2024-12-31]\` | - | \`organizationUid:"100081880"\` |
 | \`page\` | number | integer | Page number for pagination | \`0\` | \`0\`, \`1\`, \`2\` |
 | \`size\` | number | integer | Results per page (max: 500) | \`10\` | \`20\`, \`50\` |
+| \`sort\` | string | sort mode | Result ordering | \`relative\` | \`relative\` |
 
 ### Example Requests
 \`\`\`
-GET /decisions/search?q=education&from_date=2024-01-01&to_date=2024-12-31&size=20
-GET /decisions/search?org=100001274&type=Β.1.1&page=0&size=50
-GET /decisions/search?q=procurement&from_date=2024-06-01
+GET /search?q=εκπαίδευση&fq=organizationUid:"100081880"&sort=relative
+GET /search?fq=subject:"Διαπίστωση λύσης σύμβασης εργασίας λόγω παραίτησης"&fq=organizationUid:"100081880"&q=decisionType:"ΛΟΙΠΕΣ ΑΤΟΜΙΚΕΣ ΔΙΟΙΚΗΤΙΚΕΣ ΠΡΑΞΕΙΣ"&page=0&sort=relative
+GET /search?q=προμήθεια&fq=issueDate:[2024-01-01 TO 2024-12-31]&size=20
 \`\`\`
 
 ### Response Structure

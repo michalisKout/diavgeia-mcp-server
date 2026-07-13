@@ -1,5 +1,6 @@
 import axios from "axios";
 import dayjs from "dayjs";
+import { DEFAULT_CONFIG } from "../config.js";
 import {
   type DiavgeiaSearchParams,
   searchSchema,
@@ -10,17 +11,23 @@ import type {
   Organization,
 } from "../types/diavgeia.js";
 
-const API_BASE_URL =
-  process.env.DIAVGEIA_URL || "https://diavgeia.gov.gr/luminapi/api/";
+export interface DiavgeiaApiClientOptions {
+  baseUrl?: string;
+  timeout?: number;
+}
 
 export class DiavgeiaApiClient {
   private baseUrl: string;
   private client;
-  constructor(baseUrl = API_BASE_URL) {
-    this.baseUrl = baseUrl;
+
+  constructor(options: DiavgeiaApiClientOptions | string = {}) {
+    const resolvedOptions =
+      typeof options === "string" ? { baseUrl: options } : options;
+
+    this.baseUrl = resolvedOptions.baseUrl ?? DEFAULT_CONFIG.apiBaseUrl;
     this.client = axios.create({
       baseURL: this.baseUrl,
-      timeout: 10000,
+      timeout: resolvedOptions.timeout ?? DEFAULT_CONFIG.timeout,
       headers: {
         Accept: "application/json",
       },
@@ -39,39 +46,76 @@ export class DiavgeiaApiClient {
         );
       }
 
-      const queryParams: Record<string, string | number> = {};
+      const queryParams: Record<string, string | number | string[]> = {};
+      const filterQueries: string[] = [];
+
+      if (params.rawQuery) queryParams.query = params.rawQuery;
+      if (params.thematicCategory)
+        queryParams.query = quoteFilter(
+          "thematicCategory",
+          params.thematicCategory
+        );
 
       // Don't send wildcard queries - let other filters do the work
       if (params.q && params.q !== "*" && params.q.trim() !== "")
-        queryParams.term = params.q;
+        queryParams.q = params.q;
 
-      if (params.ministryIdOrName) queryParams.org = params.ministryIdOrName;
+      if (params.subject)
+        filterQueries.push(quoteFilter("subject", params.subject));
 
-      if (params.from_date)
-        queryParams.from_issue_date = dayjs(params.from_date).format(
-          "YYYY-MM-DD"
-        );
+      if (params.decisionTypes?.length)
+        filterQueries.push(listFilter("decisionType", params.decisionTypes));
 
-      if (params.to_date)
-        queryParams.to_issue_date = dayjs(params.to_date).format("YYYY-MM-DD");
+      const organizationUid = params.organizationUid ?? params.ministryIdOrName;
+      if (organizationUid)
+        filterQueries.push(quoteFilter("organizationUid", organizationUid));
+
+      if (params.unitUid)
+        filterQueries.push(quoteFilter("unitUid", params.unitUid));
+
+      const decisionType = params.decisionType ?? params.type;
+      if (decisionType)
+        if (params.rawQuery || params.thematicCategory) {
+          filterQueries.push(quoteFilter("decisionType", decisionType));
+        } else {
+          queryParams.q = quoteFilter("decisionType", decisionType);
+        }
+
+      if (params.from_date || params.to_date) {
+        const fromDate = params.from_date
+          ? dayjs(params.from_date).format("YYYY-MM-DD")
+          : "*";
+        const toDate = params.to_date
+          ? dayjs(params.to_date).format("YYYY-MM-DD")
+          : "*";
+        filterQueries.push(rangeFilter("issueDate", fromDate, toDate));
+      }
+
+      if (filterQueries.length > 0) queryParams.fq = filterQueries;
+      if (queryParams.query) queryParams.advanced = "";
 
       queryParams.page = params.page || 0;
       queryParams.size = Math.min(params.size || 500, 500);
       queryParams.sort = "relative";
-      queryParams.status = "published";
 
       const response = await this.client.get(`${this.baseUrl}/search`, {
         params: queryParams,
+        paramsSerializer: serializeSearchParams,
       });
 
       if (!response.data)
         throw new Error("Μη αναμενόμενη μορφή απάντησης από το API");
 
-      if (response.data.decisions) return response.data;
+      if (response.data.decisions)
+        return {
+          ...response.data,
+          decisions: response.data.decisions.map(normalizeDecision),
+          total: response.data.info?.total ?? response.data.total ?? 0,
+        };
 
       if (response.data.results)
         return {
-          decisions: response.data.results,
+          decisions: response.data.results.map(normalizeDecision),
           total: response.data.total || response.data.results.length,
         };
 
@@ -99,9 +143,8 @@ export class DiavgeiaApiClient {
       }
 
       const response = await this.client.get(
-        `${this.baseUrl}/decisions/${ada}`
+        `${this.baseUrl}/decisions/${encodeURIComponent(ada)}`
       );
-      console.log("Diavgeia API response for getDecisionByAda:", response.data);
 
       return response.data;
     } catch (error) {
@@ -111,7 +154,11 @@ export class DiavgeiaApiClient {
         );
       }
 
-      throw new Error(`Αποτυχία λήψης απόφασης με ΑΔΑ ${ada}`);
+      throw new Error(
+        `Αποτυχία λήψης απόφασης με ΑΔΑ ${ada}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   }
 
@@ -136,4 +183,57 @@ export class DiavgeiaApiClient {
       throw new Error("Αποτυχία λήψης οργανισμών από το API της Διαύγειας");
     }
   }
+}
+
+function serializeSearchParams(
+  params: Record<string, string | number | string[]>
+): string {
+  const searchParams = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        searchParams.append(key, item);
+      }
+      continue;
+    }
+
+    searchParams.append(key, value.toString());
+  }
+
+  return searchParams.toString();
+}
+
+function quoteFilter(field: string, value: string | number): string {
+  const stringValue = value.toString().trim();
+  if (stringValue.startsWith(`${field}:`)) return stringValue;
+  return `${field}:"${stringValue}"`;
+}
+
+function listFilter(field: string, values: Array<string | number>): string {
+  const quotedValues = values.map((value) => `"${value.toString()}"`);
+  return `${field}:[${quotedValues.join(",")}]`;
+}
+
+function rangeFilter(field: string, from: string, to: string): string {
+  return `${field}:[${from} TO ${to}]`;
+}
+
+function normalizeDecision(
+  decision: DiavgeiaDecision & Record<string, unknown>
+) {
+  const organization = decision.organization as
+    | { uid?: string; label?: string }
+    | undefined;
+  const decisionType = decision.decisionType as
+    | { uid?: string; label?: string }
+    | undefined;
+
+  return {
+    ...decision,
+    organizationId: decision.organizationId ?? organization?.uid ?? "",
+    organizationName: decision.organizationName ?? organization?.label ?? "",
+    decisionTypeId: decision.decisionTypeId ?? decisionType?.uid ?? "",
+    decisionTypeName: decision.decisionTypeName ?? decisionType?.label ?? "",
+  };
 }

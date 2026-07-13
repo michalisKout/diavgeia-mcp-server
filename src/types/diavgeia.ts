@@ -34,7 +34,7 @@ export interface DiavgeiaDecision {
   url: string; // URL to view the decision
   documentUrl: string; // URL to the document file
   status: string; // Status of the decision
-  extraFieldValues?: Record<string, any>; // Extra fields (depends on decision type)
+  extraFieldValues?: Record<string, unknown>; // Extra fields (depends on decision type)
   signers?: DiavgeiaSigner[]; // List of signers
 }
 
