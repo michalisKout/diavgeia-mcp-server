@@ -26,6 +26,9 @@ jobs:
       - name: Run linter
         run: pnpm run lint
 
+      - name: Run tests
+        run: pnpm run test
+
       - name: Build local version
         run: pnpm run build:local
 
