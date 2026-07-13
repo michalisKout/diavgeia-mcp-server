@@ -28,13 +28,25 @@ export function createDecisionTool(
 ): ToolCallback<typeof decisionRawSchema> {
   return async ({ ada }) => {
     try {
-      if (!ada)
-        return createResponse(createMissingAdaParameter(DECISION_PROMPT));
+      if (!ada) {
+        const message = createMissingAdaParameter(DECISION_PROMPT);
+        return createResponse(message, "text", {
+          found: false,
+          message,
+          decision: null,
+        });
+      }
 
       const decision = await apiClient.getDecisionByAda(ada);
 
-      if (!decision)
-        return createResponse(createDecisionNotFound(DECISION_PROMPT, ada));
+      if (!decision) {
+        const message = createDecisionNotFound(DECISION_PROMPT, ada);
+        return createResponse(message, "text", {
+          found: false,
+          message,
+          decision: null,
+        });
+      }
 
       const details = [
         "# Decision Details",
@@ -135,14 +147,34 @@ export function createDecisionTool(
         });
       }
 
-      return createResponse(createDecisionDetails(DECISION_PROMPT, details));
+      const message = createDecisionDetails(DECISION_PROMPT, details);
+      return createResponse(message, "text", {
+        found: true,
+        message,
+        decision: {
+          ada: decision.ada || "N/A",
+          subject: decision.subject || "N/A",
+          protocolNumber: decision.protocolNumber || "N/A",
+          issueDate: decision.issueDate || "N/A",
+          status: decision.status || "N/A",
+          organizationId: decision.organizationId || "N/A",
+          organizationName: decision.organizationName || "N/A",
+          decisionTypeId: decision.decisionTypeId || "N/A",
+          decisionTypeName: decision.decisionTypeName || "N/A",
+          url: decision.url || "N/A",
+          documentUrl: decision.documentUrl || "N/A",
+        },
+      });
     } catch (error) {
       logger.error(`Error retrieving decision: ${error}`);
-      return createResponse(
-        createDecisionError(
-          error instanceof Error ? error.message : "Unknown error"
-        )
+      const message = createDecisionError(
+        error instanceof Error ? error.message : "Unknown error"
       );
+      return createResponse(message, "text", {
+        found: false,
+        message,
+        decision: null,
+      });
     }
   };
 }

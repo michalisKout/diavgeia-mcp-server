@@ -199,11 +199,31 @@ describe("Diavgeia MCP server usage flows", () => {
       readOnlyHint: true,
       idempotentHint: true,
       destructiveHint: false,
+      openWorldHint: true,
     });
     expect(byName.get(GET_DECISIONS_TOOL_NAME)?.annotations).toMatchObject({
       readOnlyHint: true,
       idempotentHint: true,
       destructiveHint: false,
+      openWorldHint: true,
+    });
+    expect(byName.get(SEARCH_DECISIONS_TOOL_NAME)?.outputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        decisions: expect.any(Object),
+        total: expect.any(Object),
+        message: expect.any(Object),
+      },
+      required: expect.arrayContaining(["decisions", "total", "message"]),
+    });
+    expect(byName.get(GET_DECISIONS_TOOL_NAME)?.outputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        decision: expect.any(Object),
+        found: expect.any(Object),
+        message: expect.any(Object),
+      },
+      required: expect.arrayContaining(["found", "message"]),
     });
   });
 
@@ -244,6 +264,15 @@ describe("Diavgeia MCP server usage flows", () => {
     const responseText = textContent(result);
     expect(responseText).toContain("ΨΧ465Κ8Ω-123");
     expect(responseText).toContain("Προμήθεια εκπαιδευτικού εξοπλισμού");
+    expect(result.structuredContent).toMatchObject({
+      decisions: [
+        {
+          ada: "ΨΧ465Κ8Ω-123",
+          subject: "Προμήθεια εκπαιδευτικού εξοπλισμού",
+        },
+      ],
+      total: 1,
+    });
 
     const searchRequest = apiStub.requests.find(
       (request) => request.pathname === "/search"
@@ -355,6 +384,13 @@ describe("Diavgeia MCP server usage flows", () => {
     expect(responseText).toContain("Decision Details");
     expect(responseText).toContain("Προμήθεια εκπαιδευτικού εξοπλισμού");
     expect(responseText).toContain("Example Signer");
+    expect(result.structuredContent).toMatchObject({
+      found: true,
+      decision: {
+        ada: "ΨΧ465Κ8Ω-123",
+        subject: "Προμήθεια εκπαιδευτικού εξοπλισμού",
+      },
+    });
   });
 });
 

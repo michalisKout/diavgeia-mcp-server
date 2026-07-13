@@ -61,7 +61,12 @@ export function createSearchDecisionsTool({
         !decisionTypes?.length &&
         !thematicCategory
       ) {
-        return createResponse(MISSING_Q_PARAMETER);
+        return createResponse(MISSING_Q_PARAMETER, "text", {
+          status: "needs_input",
+          message: MISSING_Q_PARAMETER,
+          total: 0,
+          decisions: [],
+        });
       }
 
       const organizationFilter = organizationUid || ministryIdOrName;
@@ -70,9 +75,13 @@ export function createSearchDecisionsTool({
         const organizationsContext =
           await orgContext.generateOrganizationContext();
 
-        return createResponse(
-          createMissingMinistryParameter(organizationsContext)
-        );
+        const message = createMissingMinistryParameter(organizationsContext);
+        return createResponse(message, "text", {
+          status: "needs_input",
+          message,
+          total: 0,
+          decisions: [],
+        });
       }
 
       if (
@@ -184,23 +193,31 @@ export function createSearchDecisionsTool({
       allDecisions = allDecisions.slice(0, safeSize);
 
       if (allDecisions.length === 0) {
-        return createResponse(
-          createNoResultsFound(
-            SEARCH_PROMPT,
-            isOrgRelatedSearch,
-            organizationsContext
-          )
+        const message = createNoResultsFound(
+          SEARCH_PROMPT,
+          isOrgRelatedSearch,
+          organizationsContext
         );
+        return createResponse(message, "text", {
+          status: "empty",
+          message,
+          total: 0,
+          decisions: [],
+        });
       }
 
-      const formattedDecisions = allDecisions.map((decision) => ({
+      const structuredDecisions = allDecisions.map((decision) => ({
         ada: decision.ada || "N/A",
         subject: decision.subject || "N/A",
-        issue_date: decision.issueDate || "N/A",
+        issueDate: decision.issueDate || "N/A",
         organization:
           decision.organizationName || decision.organizationId || "N/A",
         type: decision.decisionTypeName || decision.decisionTypeId || "N/A",
         url: decision.documentUrl || "#",
+      }));
+      const formattedDecisions = structuredDecisions.map((decision) => ({
+        ...decision,
+        issue_date: decision.issueDate,
       }));
 
       let ministryInfo = "";
@@ -218,10 +235,21 @@ export function createSearchDecisionsTool({
         organizationsContext
       );
 
-      return createResponse(resultText);
+      return createResponse(resultText, "text", {
+        status: "ok",
+        message: resultText,
+        total: allDecisions.length,
+        decisions: structuredDecisions,
+      });
     } catch (error) {
       logger.error(`Error searching decisions: ${error}`);
-      return createResponse(createErrorMessage((error as Error).message));
+      const message = createErrorMessage((error as Error).message);
+      return createResponse(message, "text", {
+        status: "error",
+        message,
+        total: 0,
+        decisions: [],
+      });
     }
   };
 }

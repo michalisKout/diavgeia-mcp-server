@@ -1,5 +1,7 @@
 # Diavgeia MCP Server
 
+[![smithery badge](https://smithery.ai/badge/michalis.koutridis/diavgeia-mcp)](https://smithery.ai/servers/michalis.koutridis/diavgeia-mcp)
+
 A Model Context Protocol (MCP) server that provides access to Greek government transparency data from the [Diavgeia platform](https://diavgeia.gov.gr/). This server enables AI assistants like Claude to search and retrieve Greek government decisions, making public administration data more accessible.
 
 ## 🌟 Features

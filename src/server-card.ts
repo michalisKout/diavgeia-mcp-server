@@ -142,6 +142,75 @@ export const SMITHERY_SERVER_CARD = {
           },
         },
       },
+      outputSchema: {
+        type: "object",
+        properties: {
+          status: {
+            type: "string",
+            enum: ["ok", "needs_input", "empty", "error"],
+            description: "Machine-readable status of the search result.",
+          },
+          message: {
+            type: "string",
+            description:
+              "Human-readable Markdown summary returned to the user.",
+          },
+          total: {
+            type: "number",
+            description: "Number of decisions returned in this MCP response.",
+          },
+          decisions: {
+            type: "array",
+            description: "Structured list of decisions returned by the search.",
+            items: {
+              type: "object",
+              properties: {
+                ada: {
+                  type: "string",
+                  description: "Diavgeia ADA identifier.",
+                },
+                subject: {
+                  type: "string",
+                  description: "Decision subject/title.",
+                },
+                issueDate: {
+                  type: "string",
+                  description: "Decision issue date, when available.",
+                },
+                organization: {
+                  type: "string",
+                  description:
+                    "Publishing organization name or UID, when available.",
+                },
+                type: {
+                  type: "string",
+                  description: "Decision type name or identifier.",
+                },
+                url: {
+                  type: "string",
+                  description: "URL to the decision document or page.",
+                },
+              },
+              required: [
+                "ada",
+                "subject",
+                "issueDate",
+                "organization",
+                "type",
+                "url",
+              ],
+            },
+          },
+        },
+        required: ["status", "message", "total", "decisions"],
+      },
+      annotations: {
+        title: "Search Diavgeia decisions",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
     },
     {
       name: "get-decision",
@@ -156,6 +225,91 @@ export const SMITHERY_SERVER_CARD = {
           },
         },
         required: ["ada"],
+      },
+      outputSchema: {
+        type: "object",
+        properties: {
+          found: {
+            type: "boolean",
+            description: "Whether a decision was found for the requested ADA.",
+          },
+          message: {
+            type: "string",
+            description:
+              "Human-readable Markdown summary returned to the user.",
+          },
+          decision: {
+            type: ["object", "null"],
+            description: "Structured decision details, or null when not found.",
+            properties: {
+              ada: {
+                type: "string",
+                description: "Diavgeia ADA identifier.",
+              },
+              subject: {
+                type: "string",
+                description: "Decision subject/title.",
+              },
+              protocolNumber: {
+                type: "string",
+                description: "Protocol number, when available.",
+              },
+              issueDate: {
+                type: "string",
+                description: "Decision issue date, when available.",
+              },
+              status: {
+                type: "string",
+                description: "Decision publication status.",
+              },
+              organizationId: {
+                type: "string",
+                description: "Publishing organization UID.",
+              },
+              organizationName: {
+                type: "string",
+                description: "Publishing organization name.",
+              },
+              decisionTypeId: {
+                type: "string",
+                description: "Decision type UID/code.",
+              },
+              decisionTypeName: {
+                type: "string",
+                description: "Decision type name.",
+              },
+              url: {
+                type: "string",
+                description: "Canonical decision page URL.",
+              },
+              documentUrl: {
+                type: "string",
+                description: "Decision document URL.",
+              },
+            },
+            required: [
+              "ada",
+              "subject",
+              "protocolNumber",
+              "issueDate",
+              "status",
+              "organizationId",
+              "organizationName",
+              "decisionTypeId",
+              "decisionTypeName",
+              "url",
+              "documentUrl",
+            ],
+          },
+        },
+        required: ["found", "message", "decision"],
+      },
+      annotations: {
+        title: "Get Diavgeia decision",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
       },
     },
   ],

@@ -135,3 +135,31 @@ export const searchRawSchema = {
 export const searchSchema = z.object(searchRawSchema);
 
 export type DiavgeiaSearchParams = z.infer<typeof searchSchema>;
+
+export const searchOutputRawSchema = {
+  status: z
+    .enum(["ok", "needs_input", "empty", "error"])
+    .describe("Machine-readable status of the search result."),
+  message: z
+    .string()
+    .describe("Human-readable Markdown summary returned to the user."),
+  total: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe("Number of decisions returned in this MCP response."),
+  decisions: z
+    .array(
+      z.object({
+        ada: z.string().describe("Diavgeia ADA identifier."),
+        subject: z.string().describe("Decision subject/title."),
+        issueDate: z.string().describe("Decision issue date, when available."),
+        organization: z
+          .string()
+          .describe("Publishing organization name or UID, when available."),
+        type: z.string().describe("Decision type name or identifier."),
+        url: z.string().describe("URL to the decision document or page."),
+      })
+    )
+    .describe("Structured list of decisions returned by the search."),
+};
