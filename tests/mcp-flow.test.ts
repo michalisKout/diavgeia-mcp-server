@@ -147,6 +147,18 @@ function textContent(result: {
     .join("\n");
 }
 
+async function connectClient(serverInstance: DiavgeiaMCPServer) {
+  const { clientTransport, serverTransport } = createTransportPair();
+  await serverInstance.server.connect(serverTransport);
+
+  const client = new Client(
+    { name: "vitest-mcp-client", version: "1.0.0" },
+    { capabilities: {} }
+  );
+  await client.connect(clientTransport);
+  return client;
+}
+
 describe("Diavgeia MCP server usage flows", () => {
   let apiStub: Awaited<ReturnType<typeof startDiavgeiaApiStub>>;
   let client: Client;
@@ -160,15 +172,7 @@ describe("Diavgeia MCP server usage flows", () => {
       defaultDateRange: "1month",
     });
     await serverInstance.init();
-
-    const { clientTransport, serverTransport } = createTransportPair();
-    await serverInstance.server.connect(serverTransport);
-
-    client = new Client(
-      { name: "vitest-mcp-client", version: "1.0.0" },
-      { capabilities: {} }
-    );
-    await client.connect(clientTransport);
+    client = await connectClient(serverInstance);
   });
 
   afterEach(async () => {
@@ -261,5 +265,54 @@ describe("Diavgeia MCP server usage flows", () => {
     expect(responseText).toContain("Decision Details");
     expect(responseText).toContain("Προμήθεια εκπαιδευτικού εξοπλισμού");
     expect(responseText).toContain("Example Signer");
+  });
+});
+
+describe("Diavgeia MCP server configuration flows", () => {
+  const originalEnv = {
+    DIAVGEIA_API_BASE_URL: process.env.DIAVGEIA_API_BASE_URL,
+    DIAVGEIA_DEFAULT_PAGE_SIZE: process.env.DIAVGEIA_DEFAULT_PAGE_SIZE,
+    DIAVGEIA_DEFAULT_DATE_RANGE: process.env.DIAVGEIA_DEFAULT_DATE_RANGE,
+  };
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(originalEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  });
+
+  it("runs without explicit config and applies environment variable customization", async () => {
+    const apiStub = await startDiavgeiaApiStub();
+    process.env.DIAVGEIA_API_BASE_URL = apiStub.baseUrl;
+    process.env.DIAVGEIA_DEFAULT_PAGE_SIZE = "3";
+    process.env.DIAVGEIA_DEFAULT_DATE_RANGE = "3months";
+
+    const serverInstance = new DiavgeiaMCPServer();
+    await serverInstance.init();
+    const client = await connectClient(serverInstance);
+
+    try {
+      const result = await client.callTool({
+        name: SEARCH_DECISIONS_TOOL_NAME,
+        arguments: {
+          q: "εκπαιδευτικός εξοπλισμός",
+          ministryIdOrName: "100001",
+        },
+      });
+
+      expect(textContent(result)).toContain("ΨΧ465Κ8Ω-123");
+      const searchRequest = apiStub.requests.find(
+        (request) => request.pathname === "/search"
+      );
+      expect(searchRequest?.searchParams.get("size")).toBe("3");
+    } finally {
+      await client.close();
+      await serverInstance.server.close();
+      await apiStub.close();
+    }
   });
 });
