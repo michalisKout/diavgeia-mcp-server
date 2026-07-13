@@ -1,5 +1,6 @@
 import { McpAgent } from "agents/mcp";
 import { DiavgeiaMCPServer } from "./mcp-server.js";
+import { SMITHERY_SERVER_CARD } from "./server-card.js";
 
 export class DiavgeiaMCP extends McpAgent {
   server = new DiavgeiaMCPServer().server;
@@ -46,6 +47,18 @@ export default {
 
       if (request.method === "OPTIONS") {
         return addCorsHeaders(new Response("ok", { status: 200 }));
+      }
+
+      if (url.pathname === "/.well-known/mcp/server-card.json") {
+        return addCorsHeaders(
+          new Response(JSON.stringify(SMITHERY_SERVER_CARD), {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "public, max-age=300",
+            },
+          })
+        );
       }
 
       // Handle SSE endpoint and all sub-paths
