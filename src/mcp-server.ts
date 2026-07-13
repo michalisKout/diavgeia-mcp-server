@@ -9,7 +9,10 @@ import {
   GET_DECISIONS_TOOL_DESCRIPTION,
   GET_DECISIONS_TOOL_NAME,
 } from "./modules/decision/constants.js";
-import { decisionRawSchema } from "./modules/decision/schema.js";
+import {
+  decisionOutputRawSchema,
+  decisionRawSchema,
+} from "./modules/decision/schema.js";
 import { createDecisionTool } from "./modules/decision/tool.js";
 import {
   SEARCH_EXAMPLES_PROMPT,
@@ -23,7 +26,10 @@ import {
   SEARCH_DECISIONS_TOOL_DESCRIPTION,
   SEARCH_DECISIONS_TOOL_NAME,
 } from "./modules/search/constants.js";
-import { searchRawSchema } from "./modules/search/schema.js";
+import {
+  searchOutputRawSchema,
+  searchRawSchema,
+} from "./modules/search/schema.js";
 import { createSearchDecisionsTool } from "./modules/search/tool.js";
 import { BASE_PROMPT_EN } from "./prompts/template.js";
 import { OrganizationContext } from "./utils/context.js";
@@ -70,10 +76,13 @@ export class DiavgeiaMCPServer {
       {
         description: GET_DECISIONS_TOOL_DESCRIPTION,
         inputSchema: decisionRawSchema,
+        outputSchema: decisionOutputRawSchema,
         annotations: {
+          title: "Get Diavgeia decision",
           readOnlyHint: true,
           idempotentHint: true,
           destructiveHint: false,
+          openWorldHint: true,
         },
       },
       createDecisionTool(apiClient)
@@ -84,10 +93,13 @@ export class DiavgeiaMCPServer {
       {
         description: SEARCH_DECISIONS_TOOL_DESCRIPTION,
         inputSchema: searchRawSchema,
+        outputSchema: searchOutputRawSchema,
         annotations: {
+          title: "Search Diavgeia decisions",
           readOnlyHint: true,
           idempotentHint: true,
           destructiveHint: false,
+          openWorldHint: true,
         },
       },
       createSearchDecisionsTool({
