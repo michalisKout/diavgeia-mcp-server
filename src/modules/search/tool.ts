@@ -38,19 +38,35 @@ export function createSearchDecisionsTool({
 }: SearchToolDeps): ToolCallback<typeof searchRawSchema> {
   return async ({
     q,
+    rawQuery,
+    subject,
     ministryIdOrName,
+    organizationUid,
+    unitUid,
     type,
+    decisionType,
+    decisionTypes,
+    thematicCategory,
     from_date,
     to_date,
     page,
     size,
   }) => {
     try {
-      if (!q) {
+      if (
+        !q &&
+        !rawQuery &&
+        !subject &&
+        !decisionType &&
+        !decisionTypes?.length &&
+        !thematicCategory
+      ) {
         return createResponse(MISSING_Q_PARAMETER);
       }
 
-      if (!ministryIdOrName) {
+      const organizationFilter = organizationUid || ministryIdOrName;
+
+      if (!organizationFilter) {
         const organizationsContext =
           await orgContext.generateOrganizationContext();
 
@@ -59,16 +75,24 @@ export function createSearchDecisionsTool({
         );
       }
 
-      if (!from_date && !to_date) {
+      if (
+        !from_date &&
+        !to_date &&
+        !subject &&
+        !decisionType &&
+        !decisionTypes?.length &&
+        !rawQuery &&
+        !thematicCategory
+      ) {
         const dateRange = resolveDefaultDateRange(config.defaultDateRange);
         from_date = dateRange.from;
         to_date = dateRange.to;
       }
 
       let detectedMinistries: Organization[] = [];
-      if (q && ministryIdOrName && typeof ministryIdOrName === "string") {
+      if (q && organizationFilter && typeof organizationFilter === "string") {
         detectedMinistries = await orgContext.detectMinistryInQuery(
-          ministryIdOrName || q
+          organizationFilter || q
         );
       }
 
@@ -79,8 +103,15 @@ export function createSearchDecisionsTool({
 
       const searchParams: DiavgeiaSearchParams = {
         q: q || undefined,
-        ministryIdOrName: ministryIdOrName || undefined,
+        rawQuery: rawQuery || undefined,
+        subject: subject || undefined,
+        ministryIdOrName: organizationFilter || undefined,
+        organizationUid: organizationUid || undefined,
+        unitUid: unitUid || undefined,
         type: type || undefined,
+        decisionType: decisionType || type || undefined,
+        decisionTypes: decisionTypes || undefined,
+        thematicCategory: thematicCategory || undefined,
         from_date: from_date || undefined,
         to_date: to_date || undefined,
         page: page ?? 0,
@@ -108,7 +139,7 @@ export function createSearchDecisionsTool({
       }
 
       const isOrgRelatedSearch =
-        !ministryIdOrName &&
+        !organizationFilter &&
         (q?.toLowerCase().includes("υπουργείο") ||
           q?.toLowerCase().includes("οργανισμό") ||
           q?.toLowerCase().includes("δήμο") ||
@@ -173,7 +204,7 @@ export function createSearchDecisionsTool({
       }));
 
       let ministryInfo = "";
-      if (detectedMinistries.length > 0 && !ministryIdOrName) {
+      if (detectedMinistries.length > 0 && !organizationFilter) {
         ministryInfo = createDetectedOrganizationsInfo(
           detectedMinistries.map((m) => m.label)
         );

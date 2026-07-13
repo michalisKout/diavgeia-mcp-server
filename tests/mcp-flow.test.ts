@@ -73,10 +73,14 @@ async function startDiavgeiaApiStub() {
               ada: "ΨΧ465Κ8Ω-123",
               subject: "Προμήθεια εκπαιδευτικού εξοπλισμού",
               issueDate: "2026-06-30",
-              organizationId: "100001",
-              organizationName: "Υπουργείο Παιδείας",
-              decisionTypeId: "Β.2.2",
-              decisionTypeName: "Procurement contracts",
+              organization: {
+                uid: "100001",
+                label: "Υπουργείο Παιδείας",
+              },
+              decisionType: {
+                uid: "Β.2.2",
+                label: "Procurement contracts",
+              },
               documentUrl: "",
             },
           ],
@@ -245,12 +249,98 @@ describe("Diavgeia MCP server usage flows", () => {
       (request) => request.pathname === "/search"
     );
     expect(searchRequest?.searchParams.get("size")).toBe("2");
-    expect(searchRequest?.searchParams.get("from_issue_date")).toMatch(
-      /^\d{4}-\d{2}-\d{2}$/
+    expect(searchRequest?.searchParams.get("q")).toBe(
+      "εκπαιδευτικός εξοπλισμός"
     );
-    expect(searchRequest?.searchParams.get("to_issue_date")).toMatch(
-      /^\d{4}-\d{2}-\d{2}$/
+    expect(searchRequest?.searchParams.getAll("fq")).toEqual(
+      expect.arrayContaining([
+        'organizationUid:"100001"',
+        expect.stringMatching(
+          /^issueDate:\[\d{4}-\d{2}-\d{2} TO \d{4}-\d{2}-\d{2}\]$/
+        ),
+      ])
     );
+  });
+
+  it("maps precise decision search arguments to Diavgeia search filters", async () => {
+    const result = await client.callTool({
+      name: SEARCH_DECISIONS_TOOL_NAME,
+      arguments: {
+        subject: "Διαπίστωση λύσης σύμβασης εργασίας λόγω παραίτησης",
+        organizationUid: "100081880",
+        decisionType: "ΛΟΙΠΕΣ ΑΤΟΜΙΚΕΣ ΔΙΟΙΚΗΤΙΚΕΣ ΠΡΑΞΕΙΣ",
+        page: 0,
+      },
+    });
+
+    const responseText = textContent(result);
+    expect(responseText).toContain("ΨΧ465Κ8Ω-123");
+    expect(responseText).toContain("Υπουργείο Παιδείας");
+    expect(responseText).toContain("Procurement contracts");
+
+    const searchRequest = apiStub.requests.find(
+      (request) => request.pathname === "/search"
+    );
+    expect(searchRequest?.searchParams.getAll("fq")).toEqual([
+      'subject:"Διαπίστωση λύσης σύμβασης εργασίας λόγω παραίτησης"',
+      'organizationUid:"100081880"',
+    ]);
+    expect(searchRequest?.searchParams.get("q")).toBe(
+      'decisionType:"ΛΟΙΠΕΣ ΑΤΟΜΙΚΕΣ ΔΙΟΙΚΗΤΙΚΕΣ ΠΡΑΞΕΙΣ"'
+    );
+    expect(searchRequest?.searchParams.get("sort")).toBe("relative");
+  });
+
+  it("maps thematic category and unit filters to Diavgeia advanced search params", async () => {
+    const result = await client.callTool({
+      name: SEARCH_DECISIONS_TOOL_NAME,
+      arguments: {
+        thematicCategory: "ΑΠΑΣΧΟΛΗΣΗ ΚΑΙ ΕΡΓΑΣΙΑ",
+        subject: "Προσλήψεις",
+        organizationUid: "100081880",
+        unitUid: "100038330",
+        page: 0,
+      },
+    });
+
+    expect(textContent(result)).toContain("ΨΧ465Κ8Ω-123");
+    const searchRequest = apiStub.requests.find(
+      (request) => request.pathname === "/search"
+    );
+    expect(searchRequest?.searchParams.get("query")).toBe(
+      'thematicCategory:"ΑΠΑΣΧΟΛΗΣΗ ΚΑΙ ΕΡΓΑΣΙΑ"'
+    );
+    expect(searchRequest?.searchParams.getAll("fq")).toEqual([
+      'subject:"Προσλήψεις"',
+      'organizationUid:"100081880"',
+      'unitUid:"100038330"',
+    ]);
+    expect(searchRequest?.searchParams.has("advanced")).toBe(true);
+  });
+
+  it("maps raw query and multi-value decision type filters to Diavgeia advanced search params", async () => {
+    const result = await client.callTool({
+      name: SEARCH_DECISIONS_TOOL_NAME,
+      arguments: {
+        rawQuery: 'q:"ΠΕ60"',
+        decisionTypes: ["ΠΙΝΑΚΕΣ ΕΠΙΤΥΧΟΝΤΩΝ", " ΔΙΟΡΙΣΤΕΩΝ & ΕΠΙΛΑΧΟΝΤΩΝ"],
+        organizationUid: "7452",
+        unitUid: "76013",
+        page: 0,
+      },
+    });
+
+    expect(textContent(result)).toContain("ΨΧ465Κ8Ω-123");
+    const searchRequest = apiStub.requests.find(
+      (request) => request.pathname === "/search"
+    );
+    expect(searchRequest?.searchParams.get("query")).toBe('q:"ΠΕ60"');
+    expect(searchRequest?.searchParams.getAll("fq")).toEqual([
+      'decisionType:["ΠΙΝΑΚΕΣ ΕΠΙΤΥΧΟΝΤΩΝ"," ΔΙΟΡΙΣΤΕΩΝ & ΕΠΙΛΑΧΟΝΤΩΝ"]',
+      'organizationUid:"7452"',
+      'unitUid:"76013"',
+    ]);
+    expect(searchRequest?.searchParams.has("advanced")).toBe(true);
   });
 
   it("retrieves a decision detail through the MCP tool", async () => {

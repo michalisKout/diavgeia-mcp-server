@@ -9,6 +9,22 @@ export const searchRawSchema = {
     .describe(
       "Main search query keyword (e.g., 'education', 'health', 'economy'). This is the primary search term for finding relevant government decisions."
     ),
+  rawQuery: z
+    .union([z.string(), z.number()])
+    .nullable()
+    .optional()
+    .transform((val) => val?.toString()?.trim())
+    .describe(
+      'Raw Diavgeia advanced query expression. Maps directly to query=..., e.g. thematicCategory:"ΑΠΑΣΧΟΛΗΣΗ ΚΑΙ ΕΡΓΑΣΙΑ" or q:"ΠΕ60".'
+    ),
+  subject: z
+    .union([z.string(), z.number()])
+    .nullable()
+    .optional()
+    .transform((val) => val?.toString()?.trim())
+    .describe(
+      'Exact or phrase subject filter. Maps to Diavgeia fq=subject:"..." for precise searches.'
+    ),
   ministryIdOrName: z
     .union([z.string(), z.number()])
     .nullable()
@@ -17,6 +33,20 @@ export const searchRawSchema = {
     .describe(
       "Organization ID or name - will be automatically detected from ministry name if not provided. Use organization context to find valid IDs."
     ),
+  organizationUid: z
+    .union([z.string(), z.number()])
+    .nullable()
+    .optional()
+    .transform((val) => val?.toString()?.trim())
+    .describe(
+      'Exact Diavgeia organization UID. Maps to Diavgeia fq=organizationUid:"...".'
+    ),
+  unitUid: z
+    .union([z.string(), z.number()])
+    .nullable()
+    .optional()
+    .transform((val) => val?.toString()?.trim())
+    .describe('Exact Diavgeia unit UID. Maps to Diavgeia fq=unitUid:"...".'),
   type: z
     .union([z.string(), z.number()])
     .nullable()
@@ -24,6 +54,34 @@ export const searchRawSchema = {
     .transform((val) => val?.toString())
     .describe(
       "Decision type identifier (e.g., 'Β.1.1' for appointments, 'Β.2.1' for budgets)"
+    ),
+  decisionType: z
+    .union([z.string(), z.number()])
+    .nullable()
+    .optional()
+    .transform((val) => val?.toString()?.trim())
+    .describe(
+      'Exact Diavgeia decision type label or query expression. Maps to q=decisionType:"...".'
+    ),
+  decisionTypes: z
+    .array(z.union([z.string(), z.number()]))
+    .nullable()
+    .optional()
+    .transform((val) =>
+      val
+        ?.map((item) => item.toString())
+        .filter((item) => item.trim().length > 0)
+    )
+    .describe(
+      'Multiple Diavgeia decision type labels. Maps to fq=decisionType:["...", "..."].'
+    ),
+  thematicCategory: z
+    .union([z.string(), z.number()])
+    .nullable()
+    .optional()
+    .transform((val) => val?.toString()?.trim())
+    .describe(
+      'Exact thematic category label. Maps to Diavgeia query=thematicCategory:"...".'
     ),
   from_date: z
     .union([z.string(), z.number()])
