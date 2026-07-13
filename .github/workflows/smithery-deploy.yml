@@ -123,8 +123,9 @@ jobs:
           SMITHERY_SERVER_URL: ${{ secrets.SMITHERY_SERVER_URL }}
         run: |
           BASE_URL="$(node -e 'const url = new URL(process.env.SMITHERY_SERVER_URL.trim()); process.stdout.write(`${url.origin}/.well-known/mcp/server-card.json`);')"
+          echo "Verifying server card at $BASE_URL"
           curl --fail --silent --show-error --location "$BASE_URL" > /tmp/server-card.json
-          node -e 'const fs = require("fs"); const card = JSON.parse(fs.readFileSync("/tmp/server-card.json", "utf8")); if (!card.name || !Array.isArray(card.tools)) process.exit(1);'
+          node scripts/verify-server-card.mjs /tmp/server-card.json
 
       - name: Publish MCP server to Smithery
         env:
