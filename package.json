@@ -40,9 +40,9 @@
     "commitlint": "commitlint"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.11.4",
-    "agents": "0.0.90",
-    "axios": "1.9.0",
+    "@modelcontextprotocol/sdk": "1.26.0",
+    "agents": "0.3.10",
+    "axios": "1.16.0",
     "dayjs": "1.11.13",
     "fuse.js": "7.1.0",
     "pdf-lib": "1.17.1",
@@ -62,6 +62,6 @@
     "tsx": "4.19.3",
     "typescript": "5.8.3",
     "vitest": "^3.2.4",
-    "wrangler": "4.16.1"
+    "wrangler": "4.59.1"
   }
 }
