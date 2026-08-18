@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/michaliskout-diavgeia-mcp-server-badge.png)](https://mseep.ai/app/michaliskout-diavgeia-mcp-server)
+
 # Diavgeia MCP Server
 
 [![smithery badge](https://smithery.ai/badge/michalis.koutridis/diavgeia-mcp)](https://smithery.ai/servers/michalis.koutridis/diavgeia-mcp)
