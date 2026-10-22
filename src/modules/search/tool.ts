@@ -7,6 +7,7 @@ import {
   type ResolvedDiavgeiaConfig,
   resolveDefaultDateRange,
 } from "../../config.js";
+import { operationScope } from "../../platform/pdf-extractor.js";
 import {
   MISSING_Q_PARAMETER,
   createErrorMessage,
@@ -31,23 +32,33 @@ export function createSearchDecisionsTool({
   orgContext,
   config,
 }: SearchToolDeps): ToolCallback<typeof searchRawSchema> {
-  return async ({
-    org,
-    q,
-    rawQuery,
-    subject,
-    ministryIdOrName,
-    organizationUid,
-    unitUid,
-    type,
-    decisionType,
-    decisionTypes,
-    thematicCategory,
-    from_date,
-    to_date,
-    page,
-    size,
-  }) => {
+  return async (
+    {
+      org,
+      q,
+      rawQuery,
+      subject,
+      ministryIdOrName,
+      organizationUid,
+      unitUid,
+      type,
+      decisionType,
+      decisionTypes,
+      thematicCategory,
+      from_date,
+      to_date,
+      page,
+      size,
+    },
+    extra
+  ) => {
+    const scope = operationScope(
+      {
+        signal: extra?.signal ?? new AbortController().signal,
+        deadlineAt: Date.now() + 30_000,
+      },
+      30_000
+    );
     try {
       if (
         !q &&
@@ -70,7 +81,7 @@ export function createSearchDecisionsTool({
 
       if (!organizationFilter) {
         const organizationsContext =
-          await orgContext.generateOrganizationContext();
+          await orgContext.generateOrganizationContext(scope);
 
         const message = createMissingMinistryParameter(organizationsContext);
         return createResponse(message, "text", {
@@ -114,7 +125,7 @@ export function createSearchDecisionsTool({
         page: page ?? 0,
         size: safeSize,
       };
-      const baseResponse = await apiClient.searchDecisions(searchParams);
+      const baseResponse = await apiClient.searchDecisions(searchParams, scope);
       const allDecisions = baseResponse.decisions.sort(
         (a, b) => dayjs(b.issueDate).valueOf() - dayjs(a.issueDate).valueOf()
       );
@@ -180,6 +191,8 @@ export function createSearchDecisionsTool({
         total: 0,
         decisions: [],
       });
+    } finally {
+      scope.dispose();
     }
   };
 }

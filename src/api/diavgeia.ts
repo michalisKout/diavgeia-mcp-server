@@ -23,12 +23,7 @@ import {
 } from "./search-request.js";
 
 interface SearchApiPayload {
-  organizations?: Array<{
-    uid: string;
-    label: string;
-    latinName?: string;
-    abbreviation?: string;
-  }>;
+  organizations?: Organization[];
   decisions?: Array<DiavgeiaDecision & Record<string, unknown>>;
   results?: Array<DiavgeiaDecision & Record<string, unknown>>;
   decisionTypes?: Array<{
@@ -63,6 +58,11 @@ export class DiavgeiaApiClient {
     this.client = axios.create({
       baseURL: this.baseUrl,
       timeout: resolvedOptions.timeout ?? DEFAULT_CONFIG.timeout,
+      maxContentLength: 4 * 1024 * 1024,
+      maxRedirects: 0,
+      proxy: false,
+      // Axios fetch defaults to cache:"default", which workerd rejects.
+      fetchOptions: { cache: "no-store" },
       headers: {
         Accept: "application/json",
       },
@@ -386,7 +386,11 @@ export class DiavgeiaApiClient {
           : undefined;
         const transient =
           axios.isAxiosError(error) &&
-          (!status || status === 429 || status >= 500);
+          ((!status &&
+            error.code !== "ERR_BAD_RESPONSE" &&
+            error.code !== "ERR_BAD_REQUEST") ||
+            status === 429 ||
+            (status !== undefined && status >= 500));
         if (!transient || attempt + 1 === this.limits.maxAttempts) {
           if (status)
             throw new SearchError(`Search API HTTP ${status}`, "UPSTREAM_HTTP");
@@ -479,25 +483,28 @@ export class DiavgeiaApiClient {
     }
   }
 
-  async getOrganizations(): Promise<Organization[]> {
+  async getOrganizations(context?: OperationContext): Promise<Organization[]> {
+    const scope = operationScope(
+      context ?? {
+        signal: new AbortController().signal,
+        deadlineAt: Date.now() + SEARCH_LIMITS.deadlineMs,
+      },
+      SEARCH_LIMITS.deadlineMs
+    );
     try {
-      const response = await this.client.get(
-        `${this.baseUrl}/organizations.json?category=MINISTRY`
+      const data = await this.searchGet(
+        "/organizations.json",
+        new URLSearchParams({ category: "MINISTRY" }),
+        scope
       );
-
-      if (!response.data || !response.data.organizations) {
-        throw new Error("Μη αναμενόμενη μορφή απάντησης από το API");
-      }
-
-      return response.data.organizations;
-    } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        throw new Error(
-          `Σφάλμα API: ${error.response.status} - ${JSON.stringify(error.response.data)}`
+      if (!Array.isArray(data.organizations))
+        throw new SearchError(
+          "Invalid organization metadata response",
+          "UPSTREAM_RESPONSE"
         );
-      }
-
-      throw new Error("Αποτυχία λήψης οργανισμών από το API της Διαύγειας");
+      return data.organizations;
+    } finally {
+      scope.dispose();
     }
   }
 }

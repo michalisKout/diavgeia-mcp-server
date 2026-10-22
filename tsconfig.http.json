@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.local.json",
+  "compilerOptions": { "outDir": "./dist-http" },
+  "files": ["src/http.ts"],
+  "exclude": [
+    "src/index.ts",
+    "src/local.ts",
+    "node_modules",
+    "dist",
+    "dist-http"
+  ]
+}

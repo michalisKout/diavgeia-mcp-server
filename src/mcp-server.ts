@@ -49,20 +49,17 @@ export class DiavgeiaMCPServer {
     } = {}
   ) {
     this.config = loadConfig(configOverrides);
-    this.server = new McpServer({
-      name: "diavgeia-mcp-server",
-      version: "1.0.0",
-      capabilities: {
-        resources: {},
-        tools: {},
-        prompts: {},
+    this.server = new McpServer(
+      {
+        name: "diavgeia-mcp-server",
+        version: "1.0.0",
       },
-      server: {
-        keepAlive: true,
-        timeout: 120000,
-      },
-      systemPrompt: BASE_PROMPT_EN,
-    });
+      {
+        capabilities: { resources: {}, tools: {}, prompts: {} },
+        instructions: BASE_PROMPT_EN,
+        maxToolInputElements: 256,
+      }
+    );
   }
 
   async init(configOverrides?: DiavgeiaConfigOverrides) {

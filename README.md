@@ -268,3 +268,76 @@ pnpm run build:local
 ---
 
 Made with ❤️ for transparency in Greek governance 
+
+## Optional private Node HTTP hosting
+
+The existing `pnpm start` / `pnpm dev` / `pnpm deploy` commands still target
+Cloudflare, and `pnpm build:local` builds the stdio entry at `dist/local.js`.
+Node HTTP is an additional transport:
+
+```sh
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm build:http
+pnpm start:http
+```
+
+Set `DIAVGEIA_MCP_CREDENTIAL` privately in the server environment before starting.
+The HTTP entry requires it and accepts `Authorization: Bearer <credential>` on
+`/mcp`. Use the same secret in the calling backend, never in browser code. No
+credential value is printed by startup. `GET /health` is unauthenticated. `PORT`
+defaults to `3001`; the listener binds `::` for IPv6/private networking. Origins,
+when supplied, must match the request host; ordinary backend clients need no
+Origin header or CORS configuration. TLS should terminate at the hosting ingress.
+
+SDK cancellation notifications arrive on separate HTTP requests, so HTTP mode
+uses bounded sessions: 64 at most, with five minutes of inactivity before expiry.
+Session IDs are random and every request requires bearer authentication. A
+client should call `transport.terminateSession()` then `client.close()` when done;
+closing the SDK's standalone SSE connection also releases its session. A
+premature tool-response disconnect cancels only that request. DELETE, idle
+expiry and SIGTERM/SIGINT shut down owned work. Embedders can reduce these limits
+with `startHttpServer({ port, host, token, maxSessions, sessionIdleMs })`.
+One process-lifetime evidence service is shared across session servers, retaining
+the 64-entry/32-MiB cache and process-wide extraction concurrency bounds.
+
+Both HTTP entry points reject actual incoming JSON bodies over 64 KiB before
+parsing. Tool input is limited to 256 object keys/array elements. All official API
+JSON GETs reject responses over 4 MiB before parsing and refuse redirects;
+Node also disables environment proxies. Node's Axios HTTP adapter and the
+Worker's fetch adapter both enforce actual streamed response bytes. Retrieval
+retains the 30-second total deadline, at most three transient GET attempts and
+a two-second Retry-After cap. Arbitrary `rawQuery` expressions remain accepted,
+but echoing an opaque expression cannot certify complete search coverage.
+
+**PDF extraction differs by platform:** Node HTTP and stdio use isolated PDF
+workers for native page text (15 MiB, 200 pages, two concurrent extractions,
+10-second extraction deadline). The current Cloudflare runtime reports
+`unsupported` extraction and preserves decision metadata and the official link;
+it does not download the PDF or claim document-body evidence. Neither platform
+performs OCR. Output includes at most six excerpts of 1,200 characters each.
+Extraction failures preserve `found: true` when metadata was retrieved. Text
+cache entries expire after five minutes; metadata is revalidated before reuse,
+and metadata without a version does not enable cross-call text reuse.
+
+For Railway, select `Dockerfile.railway` in the service's Dockerfile path setting.
+Use one replica, `PORT=3001`, the private credential variable, health check path
+`/health`, and the image's `node dist-http/http.js` start command. Connect clients
+to the service's private DNS on port 3001 with path `/mcp`; no public domain or
+TCP proxy is needed. Configure these settings in Railway; this repository adds
+no Railway Config-as-Code file. The image includes the compiled PDF worker.
+
+Validate compatibility before publishing:
+
+```sh
+pnpm lint
+pnpm type-check
+pnpm test
+pnpm build:local
+pnpm build:http
+pnpm exec wrangler deploy --dry-run
+```
+
+The test suite starts local HTTP and workerd servers. The Smithery workflow keeps
+its existing Worker deployment and card publishing steps and additionally checks
+the HTTP build and Worker dry run. Installs in CI and Docker disable lifecycle
+scripts; local contributors may explicitly install their Git hooks separately.

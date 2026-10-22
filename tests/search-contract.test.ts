@@ -675,3 +675,23 @@ describe("verified search contract", () => {
     }
   );
 });
+
+describe("opaque query coverage", () => {
+  it.each([
+    'unitId:"ignored"',
+    'unknownField:"ignored"',
+    'subject:"synthetic" OR unknownField:"ignored"',
+  ])("does not certify echoed opaque expression %s", async (rawQuery) => {
+    const { client } = await fixture((u, r) => json(r, envelope(u, [], 0)));
+    const result = await client.searchDecisions({
+      rawQuery,
+      organizationUid: "100081880",
+      from_date: "2026-09-01",
+      to_date: "2026-09-30",
+      size: 1,
+    });
+    expect(result.coverage?.completeness).not.toBe("complete");
+    expect(result.coverage?.appliedFilters).not.toHaveProperty("rawQuery");
+    expect(result.coverage?.limitations.length).toBeGreaterThan(0);
+  });
+});

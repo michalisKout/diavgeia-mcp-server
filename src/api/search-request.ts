@@ -159,8 +159,9 @@ export function verifySearchFilters(
         )
       : "",
   };
+  // Opaque caller expressions have no independently verified semantics.
   for (const [key, clause] of Object.entries(expected))
-    if (clause && hasClause(clause)) verified.add(key);
+    if (key !== "rawQuery" && clause && hasClause(clause)) verified.add(key);
   if (
     p.organizationUid &&
     hasClause(quote("organizationLatinName", p.organizationUid))
