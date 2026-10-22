@@ -257,16 +257,15 @@ export function createDecisionEvidenceService(
         decision.status,
         decision.documentUrl,
       ]);
-      // Without a server revision/hash, metadata cannot establish document freshness.
-      const cached =
-        version || decision.documentChecksum
-          ? await cache.getOrLoad(
-              key,
-              context,
-              load,
-              (value) => new TextEncoder().encode(JSON.stringify(value)).length
-            )
-          : await load(context);
+      // Versionless callers share only current work: completed bytes must be
+      // downloaded again because metadata cannot establish their freshness.
+      const cached = await cache.getOrLoad(
+        key,
+        context,
+        load,
+        (value) => new TextEncoder().encode(JSON.stringify(value)).length,
+        { retain: Boolean(version || decision.documentChecksum) }
+      );
       checkOperation(context);
       evidence.checksum = cached.checksum;
       evidence.fetchedAt = cached.fetchedAt;

@@ -107,10 +107,25 @@ describe("decision page evidence", () => {
           headers: { "content-type": "application/pdf" },
         }),
     });
-    expect(
-      (await bad.getDecisionEvidence({ ada: metadata.ada }, context()))
-        .extraction.state
-    ).toBe("failed");
+    const diagnostics: string[] = [];
+    const stderr = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
+        diagnostics.push(String(chunk));
+        return true;
+      });
+    let corruptState: string | undefined;
+    try {
+      corruptState = (
+        await bad.getDecisionEvidence({ ada: metadata.ada }, context())
+      ).extraction.state;
+    } finally {
+      stderr.mockRestore();
+    }
+    expect(corruptState).toBe("failed");
+    expect(diagnostics.join("").trim()).toBe(
+      "Warning: Indexing all PDF objects"
+    );
     const s = service();
     s.getDecisionByAda.mockResolvedValue({ ...metadata, documentUrl: "" });
     expect(
@@ -209,6 +224,92 @@ describe("decision page evidence", () => {
     s.getDecisionByAda.mockResolvedValue({ ...metadata, status: "published" });
     await s.getDecisionEvidence({ ada: metadata.ada }, context());
     expect(s.fetcher).toHaveBeenCalledTimes(4);
+  });
+  it("concurrent versionless consumers share one real extraction, then a later call downloads fresh bytes", async () => {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetcher = vi.fn(async () => {
+      await gate;
+      return new Response(bytes("multipage-greek"), {
+        headers: { "content-type": "application/pdf" },
+      });
+    });
+    const extract = vi.fn((b: Uint8Array, c: ReturnType<typeof context>) =>
+      extractor.extract(b, c)
+    );
+    const s = service("multipage-greek", {
+      fetch: fetcher,
+      extractor: { extract },
+    });
+    s.getDecisionByAda.mockResolvedValue({
+      ...metadata,
+      versionId: undefined,
+    } as never);
+    const first = s.getDecisionEvidence(
+      { ada: metadata.ada, query: "αίτηση" },
+      context()
+    );
+    const second = s.getDecisionEvidence(
+      { ada: metadata.ada, query: "αίτηση" },
+      context()
+    );
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalled());
+    release();
+    const results = await Promise.all([first, second]);
+    for (const evidence of results) {
+      expect(evidence.extraction.state).toBe("native");
+      expect(evidence.excerpts[0].page).toBe(3);
+    }
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(extract).toHaveBeenCalledTimes(1);
+    expect(results[0].checksum).toBe(results[1].checksum);
+    await s.getDecisionEvidence({ ada: metadata.ada }, context());
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(extract).toHaveBeenCalledTimes(2);
+    expect(s.getDecisionByAda).toHaveBeenCalledTimes(3);
+  });
+  it("canceling one versionless consumer leaves the shared download and remaining consumer active", async () => {
+    let release = () => {};
+    let sharedSignal: AbortSignal | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
+      sharedSignal = init?.signal ?? undefined;
+      await gate;
+      return new Response(bytes("multipage-greek"), {
+        headers: { "content-type": "application/pdf" },
+      });
+    });
+    const extract = vi.fn((b: Uint8Array, c: ReturnType<typeof context>) =>
+      extractor.extract(b, c)
+    );
+    const s = service("multipage-greek", {
+      fetch: fetcher,
+      extractor: { extract },
+    });
+    s.getDecisionByAda.mockResolvedValue({
+      ...metadata,
+      versionId: undefined,
+    } as never);
+    const controller = new AbortController();
+    const first = s.getDecisionEvidence(
+      { ada: metadata.ada },
+      { signal: controller.signal, deadlineAt: Date.now() + 5000 }
+    );
+    const second = s.getDecisionEvidence({ ada: metadata.ada }, context());
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalled());
+    controller.abort();
+    const aborted = await first;
+    expect(aborted.extraction.state).toBe("failed");
+    expect(s.errorCodeFor(aborted)).toBe("ABORTED");
+    expect(sharedSignal?.aborted).toBe(false);
+    release();
+    expect((await second).extraction.state).toBe("native");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(extract).toHaveBeenCalledTimes(1);
   });
   it("checksum remains available when retrieved PDF extraction fails", async () => {
     const e = await service("multipage-greek", {

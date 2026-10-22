@@ -52,11 +52,14 @@ export class BoundedCache<T> {
     key: string,
     context: OperationContext,
     loader: (context: OperationContext) => Promise<T>,
-    weight: (value: T) => number
+    weight: (value: T) => number,
+    options: { retain?: boolean } = {}
   ): Promise<T> {
     checkOperation(context);
     this.expire();
-    const cached = this.entries.get(key);
+    // Versionless metadata can share current work without trusting completed text.
+    const retain = options.retain !== false;
+    const cached = retain ? this.entries.get(key) : undefined;
     if (cached) {
       this.entries.delete(key);
       this.entries.set(key, cached);
@@ -87,7 +90,7 @@ export class BoundedCache<T> {
       );
       current.promise = current.promise
         .then((value) => {
-          if (!controller.signal.aborted) {
+          if (retain && !controller.signal.aborted) {
             const bytes = weight(value);
             if (
               Number.isFinite(bytes) &&
