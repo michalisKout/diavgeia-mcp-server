@@ -306,7 +306,9 @@ JSON GETs reject responses over 4 MiB before parsing and refuse redirects;
 Node also disables environment proxies. Node's Axios HTTP adapter and the
 Worker's fetch adapter both enforce actual streamed response bytes. Retrieval
 retains the 30-second total deadline, at most three transient GET attempts and
-a two-second Retry-After cap. Arbitrary `rawQuery` expressions remain accepted,
+a two-second Retry-After cap. A retry wait that consumes the remaining deadline
+ends the operation, even if its timer wakes early. Arbitrary `rawQuery`
+expressions remain accepted,
 but echoing an opaque expression cannot certify complete search coverage.
 
 **PDF extraction differs by platform:** Node HTTP and stdio use isolated PDF
