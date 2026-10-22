@@ -239,6 +239,15 @@ export class DiavgeiaApiClient {
               "Upstream also restricted submission-time coverage; historical issue dates may be incomplete."
             );
           const pageVerified = verifySearchFilters(scoped, echo, normalized);
+          if (
+            ((scoped.from_date && !pageVerified.has("from_date")) ||
+              (scoped.to_date && !pageVerified.has("to_date"))) &&
+            !coverage.limitations.some((value) => value.includes("full-day"))
+          ) {
+            coverage.limitations.push(
+              "Full-day issue-date coverage could not be verified from upstream time/zone bounds."
+            );
+          }
           for (const key of verified)
             if (!pageVerified.has(key)) verified.delete(key);
           const total = data.info?.total ?? data.total;
@@ -265,15 +274,20 @@ export class DiavgeiaApiClient {
               ? total
               : null;
           if (windows.length === 1) upstreamTotal = knownTotal;
-          for (const row of normalized)
-            if (!decisions.has(row.ada) && decisions.size < params.size)
-              decisions.set(row.ada, row);
+          let discardedUniqueRows = false;
+          for (const row of normalized) {
+            if (decisions.has(row.ada)) continue;
+            if (decisions.size < params.size) decisions.set(row.ada, row);
+            else discardedUniqueRows = true;
+          }
+          if (discardedUniqueRows) anyMore = true;
           const more =
             knownTotal === null
               ? null
               : scoped.page * params.size + rows.length < knownTotal;
           if (more === false) {
             window.complete =
+              !discardedUniqueRows &&
               !submissionLimited &&
               Object.keys(requestedFilters(scoped)).every((key) =>
                 pageVerified.has(key)

@@ -173,21 +173,24 @@ export function verifySearchFilters(
     )
   )
     verified.add("decisionTypes");
-  const dateEcho =
-    /issueDate:\[DT\((\d{4}-\d{2}-\d{2})T[^)]*\) TO DT\((\d{4}-\d{2}-\d{2})T[^)]*\)\]/.exec(
-      clauses.find((clause) => clause.startsWith("issueDate:")) ?? ""
-    );
+  const dateEcho = /^issueDate:\[DT\(([^)]+)\) TO DT\(([^)]+)\)\]$/.exec(
+    clauses.find((clause) => clause.startsWith("issueDate:")) ?? ""
+  );
   if (dateEcho) {
     if (
-      (p.from_date && dateEcho[1] !== p.from_date) ||
-      (p.to_date && dateEcho[2] !== p.to_date)
+      (p.from_date && dateEcho[1].slice(0, 10) !== p.from_date) ||
+      (p.to_date && dateEcho[2].slice(0, 10) !== p.to_date)
     )
       throw new SearchError(
         "Issue date filter echo mismatch",
         "FILTER_MISMATCH"
       );
-    if (p.from_date) verified.add("from_date");
-    if (p.to_date) verified.add("to_date");
+    // Exact zone-free boundaries preserve the request's own time semantics.
+    // Explicit offsets or clipped hours need interval semantics we cannot establish here.
+    if (p.from_date && dateEcho[1] === `${p.from_date}T00:00:00`)
+      verified.add("from_date");
+    if (p.to_date && dateEcho[2] === `${p.to_date}T23:59:59`)
+      verified.add("to_date");
   }
   for (const [key, clause] of Object.entries(expected)) {
     const field = clause.split(":")[0];
@@ -270,7 +273,13 @@ export function verifySearchFilters(
         `Returned ${key} filter mismatch`,
         "FILTER_MISMATCH"
       );
-    if (results.length && results.every((result) => result === true))
+    // Returned dates can disprove a filter, but cannot prove that boundary-hour rows were not omitted.
+    if (
+      key !== "from_date" &&
+      key !== "to_date" &&
+      results.length &&
+      results.every((result) => result === true)
+    )
       verified.add(key);
   }
   return verified;

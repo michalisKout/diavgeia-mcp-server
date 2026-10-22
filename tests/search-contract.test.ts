@@ -589,4 +589,89 @@ describe("verified search contract", () => {
       ).rejects.toThrow(/organization/i);
     }
   );
+  it("reports unique rows discarded when a final window page exceeds remaining global capacity", async () => {
+    const { client } = await fixture((u, r) => {
+      const firstWindow = u.searchParams
+        .get("q")
+        ?.includes("DT(2026-01-01T00:00:00)");
+      const rows = firstWindow
+        ? [{ ...row, ada: "SYNTHETIC-A", issueDate: "2026-03-01" }]
+        : [
+            { ...row, ada: "SYNTHETIC-B", issueDate: "2026-07-01" },
+            { ...row, ada: "SYNTHETIC-C", issueDate: "2026-07-02" },
+          ];
+      json(r, envelope(u, rows, rows.length));
+    });
+    const result = await client.searchDecisions({
+      ...simple,
+      subject: "SYNTHETIC SUBJECT",
+      size: 2,
+      from_date: "2026-01-01",
+      to_date: "2026-09-30",
+    });
+    expect(result.decisions.map((decision) => decision.ada)).toEqual([
+      "SYNTHETIC-A",
+      "SYNTHETIC-B",
+    ]);
+    expect(result.total).toBe(2);
+    expect(result.coverage).toMatchObject({
+      hasMore: true,
+      completeness: "limited",
+      windows: [{ complete: true }, { complete: false }],
+    });
+    expect(result.coverage?.limitations.join(" ")).toMatch(
+      /limit|truncat|omitt/i
+    );
+  });
+
+  it.each([
+    {
+      from: "2026-09-01T12:00:00",
+      to: "2026-09-30T23:59:59",
+      unverified: ["from_date"],
+    },
+    {
+      from: "2026-09-01T00:00:00",
+      to: "2026-09-30T00:00:00",
+      unverified: ["to_date"],
+    },
+    {
+      from: "2026-09-01T00:00:00+03:00",
+      to: "2026-09-30T23:59:59+03:00",
+      unverified: ["from_date", "to_date"],
+    },
+    {
+      from: "2026-09-01T00:00:00Z",
+      to: "2026-09-30T23:59:59Z",
+      unverified: ["from_date", "to_date"],
+    },
+  ])(
+    "does not verify full-day coverage from clipped or uncertain zoned date bounds: %j",
+    async ({ from, to, unverified }) => {
+      const { client } = await fixture((u, r) => {
+        const data = envelope(u);
+        data.info.query = data.info.query.replace(
+          "issueDate:[DT(2026-09-01T00:00:00) TO DT(2026-09-30T23:59:59)]",
+          `issueDate:[DT(${from}) TO DT(${to})]`
+        );
+        json(r, data);
+      });
+      const result = await client.searchDecisions({
+        ...simple,
+        subject: "SYNTHETIC SUBJECT",
+        from_date: "2026-09-01",
+        to_date: "2026-09-30",
+      });
+      expect(result.total).toBe(1);
+      expect(result.coverage).toMatchObject({
+        completeness: "limited",
+        windows: [{ complete: false }],
+      });
+      expect(result.coverage?.limitations.join(" ")).toMatch(
+        /full-day|time.zone/i
+      );
+      for (const key of unverified)
+        expect(result.coverage?.appliedFilters).not.toHaveProperty(key);
+    }
+  );
 });
