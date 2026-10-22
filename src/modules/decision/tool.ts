@@ -1,8 +1,7 @@
 import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { PDFDocument } from "pdf-lib";
-// @ts-ignore
-import pdf from "pdf-parse/lib/pdf-parse.js";
 import { DiavgeiaApiClient } from "../../api/diavgeia.js";
+import { resolveDocumentLimits } from "../../config.js";
+import { operationScope } from "../../platform/pdf-extractor.js";
 import {
   createDecisionDetails,
   createDecisionError,
@@ -12,21 +11,31 @@ import {
 import { DECISION_PROMPT } from "../../prompts/template.js";
 import { logger } from "../../utils/logger.js";
 import { createResponse } from "../../utils/response.js";
+import {
+  type DecisionEvidenceDependencies,
+  type DecisionEvidenceService,
+  createDecisionEvidenceService,
+} from "./evidence.js";
 import type { decisionRawSchema } from "./schema.js";
 
-async function downloadPDF(url: string) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-
-  return await response.arrayBuffer();
-}
-
 export function createDecisionTool(
-  apiClient: DiavgeiaApiClient
+  apiClient: DiavgeiaApiClient,
+  options: Partial<Omit<DecisionEvidenceDependencies, "apiClient">> & {
+    evidenceService?: DecisionEvidenceService;
+  } = {}
 ): ToolCallback<typeof decisionRawSchema> {
-  return async ({ ada }) => {
+  const limits = resolveDocumentLimits(options.limits);
+  const evidenceService =
+    options.evidenceService ??
+    createDecisionEvidenceService({ apiClient, ...options });
+  return async ({ ada, query, maxExcerpts }, extra) => {
+    const scope = operationScope(
+      {
+        signal: extra?.signal ?? new AbortController().signal,
+        deadlineAt: Date.now() + limits.deadlineMs,
+      },
+      limits.deadlineMs
+    );
     try {
       if (!ada) {
         const message = createMissingAdaParameter(DECISION_PROMPT);
@@ -37,7 +46,7 @@ export function createDecisionTool(
         });
       }
 
-      const decision = await apiClient.getDecisionByAda(ada);
+      const decision = await apiClient.getDecisionByAda(ada, scope);
 
       if (!decision) {
         const message = createDecisionNotFound(DECISION_PROMPT, ada);
@@ -71,50 +80,20 @@ export function createDecisionTool(
         `- **Document URL**: ${decision.documentUrl || "N/A"}`,
       ];
 
-      if (decision.documentUrl) {
-        try {
-          logger.info(`Downloading PDF from: ${decision.documentUrl}`);
-          const rawPdf = await downloadPDF(decision.documentUrl);
-          const pdfFile = await PDFDocument.create();
-          const pdfDoc = await PDFDocument.load(rawPdf);
-          const copiedPages = await pdfFile.copyPages(
-            pdfDoc,
-            pdfDoc.getPageIndices()
-          );
-          copiedPages.forEach((page) => pdfFile.addPage(page));
-          const buffer = Buffer.from(await pdfFile.save());
-
-          // Suppress console warnings from pdf-parse
-          const originalWarn = console.warn;
-          const originalError = console.error;
-          console.warn = () => {};
-          console.error = () => {};
-
-          const res = await pdf(buffer);
-
-          // Restore console methods
-          console.warn = originalWarn;
-          console.error = originalError;
-
-          if (res.text) {
-            const excerpt = res.text.substring(0, 1000).trim();
-            details.push("");
-            details.push("## Document Content");
-            details.push("**Excerpt** (first 1000 characters):");
-            details.push("```");
-            details.push(excerpt);
-            details.push("```");
-            logger.info("PDF content extracted successfully");
-          }
-        } catch (pdfError) {
-          logger.warn(
-            `Failed to extract PDF content: ${pdfError instanceof Error ? pdfError.message : "Unknown error"}`
-          );
-          details.push("");
-          details.push("## Document Content");
-          details.push("**Status**: Unable to extract PDF content");
-        }
-      }
+      const evidence = await evidenceService.evidenceForDecision(
+        { ada, query, maxExcerpts },
+        decision,
+        scope
+      );
+      details.push(
+        "",
+        "## Document Content",
+        `**Extraction**: ${evidence.extraction.state}`
+      );
+      for (const excerpt of evidence.excerpts)
+        details.push(`**Page ${excerpt.page}**`, excerpt.text);
+      for (const limitation of evidence.extraction.limitations)
+        details.push(`**Limitation**: ${limitation}`);
 
       if (
         decision.signers &&
@@ -151,6 +130,17 @@ export function createDecisionTool(
       return createResponse(message, "text", {
         found: true,
         message,
+        evidence,
+        ...(evidence.extraction.state === "failed" ||
+        evidence.extraction.state === "unsupported"
+          ? {
+              errorCode: scope.signal.aborted
+                ? Date.now() >= scope.deadlineAt
+                  ? "DEADLINE_EXCEEDED"
+                  : "ABORTED"
+                : (evidenceService.errorCodeFor(evidence) ?? "DOCUMENT_FAILED"),
+            }
+          : {}),
         decision: {
           ada: decision.ada || "N/A",
           subject: decision.subject || "N/A",
@@ -174,7 +164,14 @@ export function createDecisionTool(
         found: false,
         message,
         decision: null,
+        errorCode: scope.signal.aborted
+          ? Date.now() >= scope.deadlineAt
+            ? "DEADLINE_EXCEEDED"
+            : "ABORTED"
+          : "UPSTREAM_ERROR",
       });
+    } finally {
+      scope.dispose();
     }
   };
 }

@@ -162,3 +162,45 @@ export const searchLimitsSchema = z.object({
   maxPages: z.number().int().min(1).max(SEARCH_LIMITS.maxPages),
 });
 export type SearchLimits = z.infer<typeof searchLimitsSchema>;
+
+/** Downward-only bounds for document work and transient text storage. */
+export const DOCUMENT_LIMITS = Object.freeze({
+  deadlineMs: 30_000,
+  maxAttempts: 3,
+  retryAfterMs: 2_000,
+  maxRedirects: 3,
+  maxBytes: 15 * 1024 * 1024,
+  maxPages: 200,
+  concurrency: 2,
+  extractionMs: 10_000,
+  maxExcerpts: 6,
+  excerptCharacters: 1_200,
+  cacheEntries: 64,
+  cacheBytes: 32 * 1024 * 1024,
+  cacheTtlMs: 5 * 60_000,
+});
+export const documentLimitsSchema = z.object({
+  deadlineMs: z.number().int().min(1).max(DOCUMENT_LIMITS.deadlineMs),
+  maxAttempts: z.number().int().min(1).max(DOCUMENT_LIMITS.maxAttempts),
+  retryAfterMs: z.number().int().min(0).max(DOCUMENT_LIMITS.retryAfterMs),
+  maxRedirects: z.number().int().min(0).max(DOCUMENT_LIMITS.maxRedirects),
+  maxBytes: z.number().int().min(1).max(DOCUMENT_LIMITS.maxBytes),
+  maxPages: z.number().int().min(1).max(DOCUMENT_LIMITS.maxPages),
+  concurrency: z.number().int().min(1).max(DOCUMENT_LIMITS.concurrency),
+  extractionMs: z.number().int().min(1).max(DOCUMENT_LIMITS.extractionMs),
+  maxExcerpts: z.number().int().min(1).max(DOCUMENT_LIMITS.maxExcerpts),
+  excerptCharacters: z
+    .number()
+    .int()
+    .min(1)
+    .max(DOCUMENT_LIMITS.excerptCharacters),
+  cacheEntries: z.number().int().min(1).max(DOCUMENT_LIMITS.cacheEntries),
+  cacheBytes: z.number().int().min(1).max(DOCUMENT_LIMITS.cacheBytes),
+  cacheTtlMs: z.number().int().min(1).max(DOCUMENT_LIMITS.cacheTtlMs),
+});
+export type DocumentLimits = z.infer<typeof documentLimitsSchema>;
+export function resolveDocumentLimits(
+  overrides: Partial<DocumentLimits> = {}
+): DocumentLimits {
+  return documentLimitsSchema.parse({ ...DOCUMENT_LIMITS, ...overrides });
+}

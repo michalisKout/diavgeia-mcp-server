@@ -9,6 +9,7 @@ import {
   GET_DECISIONS_TOOL_DESCRIPTION,
   GET_DECISIONS_TOOL_NAME,
 } from "./modules/decision/constants.js";
+import type { DecisionEvidenceService } from "./modules/decision/evidence.js";
 import {
   decisionOutputRawSchema,
   decisionRawSchema,
@@ -31,6 +32,7 @@ import {
   searchRawSchema,
 } from "./modules/search/schema.js";
 import { createSearchDecisionsTool } from "./modules/search/tool.js";
+import type { PdfExtractor } from "./platform/pdf-extractor.js";
 import { BASE_PROMPT_EN } from "./prompts/template.js";
 import { OrganizationContext } from "./utils/context.js";
 
@@ -38,7 +40,14 @@ export class DiavgeiaMCPServer {
   server: McpServer;
   private config: ResolvedDiavgeiaConfig;
 
-  constructor(configOverrides?: DiavgeiaConfigOverrides) {
+  constructor(
+    configOverrides?: DiavgeiaConfigOverrides,
+    private readonly platform: {
+      extractor?: PdfExtractor;
+      /** Reuse one process-lifetime service across fresh HTTP session servers. */
+      evidenceService?: DecisionEvidenceService;
+    } = {}
+  ) {
     this.config = loadConfig(configOverrides);
     this.server = new McpServer({
       name: "diavgeia-mcp-server",
@@ -85,7 +94,10 @@ export class DiavgeiaMCPServer {
           openWorldHint: true,
         },
       },
-      createDecisionTool(apiClient)
+      createDecisionTool(apiClient, {
+        extractor: this.platform.extractor,
+        evidenceService: this.platform.evidenceService,
+      })
     );
 
     this.server.registerTool(

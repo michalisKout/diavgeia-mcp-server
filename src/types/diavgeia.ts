@@ -25,6 +25,8 @@ export interface DiavgeiaSearchResponse {
  * Structure of a Diavgeia Decision
  */
 export interface DiavgeiaDecision {
+  versionId?: string;
+  documentChecksum?: string | null;
   ada: string; // Unique ID for the decision
   subject: string; // Subject of the decision
   protocolNumber: string; // Protocol number

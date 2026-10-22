@@ -22,6 +22,7 @@
   "files": ["src/local.ts"],
   "include": [
     "src/modules/**/*.ts",
+    "src/platform/**/*.ts",
     "src/api/**/*.ts",
     "src/types/**/*.ts",
     "src/utils/**/*.ts",

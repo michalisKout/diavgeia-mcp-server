@@ -6,6 +6,7 @@ import {
   searchLimitsSchema,
 } from "../config.js";
 import type { DiavgeiaSearchParams } from "../modules/search/schema.js";
+import { operationScope } from "../platform/pdf-extractor.js";
 import type {
   DiavgeiaDecision,
   DiavgeiaSearchResponse,
@@ -435,17 +436,34 @@ export class DiavgeiaApiClient {
     throw new SearchError("Search failed", "UPSTREAM_HTTP");
   }
 
-  async getDecisionByAda(ada: string): Promise<DiavgeiaDecision> {
+  async getDecisionByAda(
+    ada: string,
+    context?: OperationContext
+  ): Promise<DiavgeiaDecision> {
     try {
       if (!ada || ada.trim() === "") {
         throw new Error("Απαιτείται έγκυρο ΑΔΑ");
       }
 
-      const response = await this.client.get(
-        `${this.baseUrl}/decisions/${encodeURIComponent(ada)}`
+      const scope = operationScope(
+        context ?? {
+          signal: new AbortController().signal,
+          deadlineAt: Date.now() + SEARCH_LIMITS.deadlineMs,
+        },
+        SEARCH_LIMITS.deadlineMs
       );
-
-      return normalizeDecision(response.data);
+      try {
+        const data = await this.searchGet(
+          `/decisions/${encodeURIComponent(ada)}`,
+          new URLSearchParams(),
+          scope
+        );
+        return normalizeDecision(
+          data as unknown as DiavgeiaDecision & Record<string, unknown>
+        );
+      } finally {
+        scope.dispose();
+      }
     } catch (error) {
       if (axios.isAxiosError(error) && error.response) {
         throw new Error(

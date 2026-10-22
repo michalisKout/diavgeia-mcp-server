@@ -2,12 +2,15 @@
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { DiavgeiaMCPServer } from "./mcp-server.js";
+import { createNodePdfExtractor } from "./platform/node-pdf-extractor.js";
 import { logger } from "./utils/logger.js";
 
 async function main() {
   try {
     const transport = new StdioServerTransport();
-    const serverInstance = new DiavgeiaMCPServer();
+    const serverInstance = new DiavgeiaMCPServer(undefined, {
+      extractor: createNodePdfExtractor(),
+    });
     await serverInstance.init();
     await serverInstance.server.connect(transport);
 
