@@ -64,8 +64,10 @@ describe("actual workerd upstream boundaries", () => {
       const result = await worker.fetch(
         `/?${new URLSearchParams({ base, operation })}`
       );
+      const body = await result.text();
       expect(result.status).toBe(502);
-      expect(attempts, await result.text()).toBe(1);
+      expect(body).toBe("Upstream fixture failed");
+      expect(attempts, body).toBe(1);
     }
   );
   it("refuses redirects in workerd", async () => {

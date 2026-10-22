@@ -16,8 +16,8 @@ export default {
             ? await client.getDecisionByAda("SYNTHETIC")
             : await client.getOrganizations();
       return Response.json(result);
-    } catch (error) {
-      return new Response(String(error), { status: 502 });
+    } catch {
+      return new Response("Upstream fixture failed", { status: 502 });
     }
   },
 };
