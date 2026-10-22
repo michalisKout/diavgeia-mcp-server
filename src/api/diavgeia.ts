@@ -6,7 +6,10 @@ import {
   searchLimitsSchema,
 } from "../config.js";
 import type { DiavgeiaSearchParams } from "../modules/search/schema.js";
-import { operationScope } from "../platform/pdf-extractor.js";
+import {
+  isDeadlineExceeded,
+  operationScope,
+} from "../platform/pdf-extractor.js";
 import type {
   DiavgeiaDecision,
   DiavgeiaSearchResponse,
@@ -86,7 +89,10 @@ export class DiavgeiaApiClient {
     if (context?.signal.aborted) abort();
     context?.signal.addEventListener("abort", abort, { once: true });
     const timer = setTimeout(
-      () => controller.abort(new Error("Search deadline exceeded")),
+      () =>
+        controller.abort(
+          new SearchError("Search deadline exceeded", "DEADLINE_EXCEEDED")
+        ),
       deadlineAt - Date.now()
     );
     const operation = { signal: controller.signal, deadlineAt };
@@ -348,7 +354,7 @@ export class DiavgeiaApiClient {
     context: OperationContext
   ): Promise<SearchApiPayload> {
     for (let attempt = 0; attempt < this.limits.maxAttempts; attempt++) {
-      if (Date.now() >= context.deadlineAt)
+      if (isDeadlineExceeded(context))
         throw new SearchError("Search deadline exceeded", "DEADLINE_EXCEEDED");
       if (context.signal.aborted)
         throw new SearchError("Search aborted", "ABORTED");
@@ -374,7 +380,7 @@ export class DiavgeiaApiClient {
           );
         return response.data;
       } catch (error) {
-        if (Date.now() >= context.deadlineAt)
+        if (isDeadlineExceeded(context))
           throw new SearchError(
             "Search deadline exceeded",
             "DEADLINE_EXCEEDED"
@@ -412,14 +418,11 @@ export class DiavgeiaApiClient {
           const retryDelay = Number.isFinite(delay) ? delay : 100;
           const abort = () => {
             clearTimeout(timer);
+            const deadline = isDeadlineExceeded(context);
             reject(
               new SearchError(
-                Date.now() >= context.deadlineAt
-                  ? "Search deadline exceeded"
-                  : "Search aborted",
-                Date.now() >= context.deadlineAt
-                  ? "DEADLINE_EXCEEDED"
-                  : "ABORTED"
+                deadline ? "Search deadline exceeded" : "Search aborted",
+                deadline ? "DEADLINE_EXCEEDED" : "ABORTED"
               )
             );
           };

@@ -16,8 +16,18 @@ export class DocumentError extends Error {
     this.name = "DocumentError";
   }
 }
+export function isDeadlineExceeded(context: OperationContext): boolean {
+  const reason: unknown = context.signal.reason;
+  return (
+    Date.now() >= context.deadlineAt ||
+    (context.signal.aborted &&
+      reason instanceof Error &&
+      "code" in reason &&
+      reason.code === "DEADLINE_EXCEEDED")
+  );
+}
 export function checkOperation(context: OperationContext): void {
-  if (Date.now() >= context.deadlineAt)
+  if (isDeadlineExceeded(context))
     throw new DocumentError("Document deadline exceeded", "DEADLINE_EXCEEDED");
   if (context.signal.aborted)
     throw new DocumentError("Document operation aborted", "ABORTED");
@@ -26,10 +36,15 @@ export function checkOperation(context: OperationContext): void {
 export function operationScope(context: OperationContext, maxMs: number) {
   const controller = new AbortController();
   const deadlineAt = Math.min(context.deadlineAt, Date.now() + maxMs);
-  const abort = () => controller.abort();
+  const abort = () => controller.abort(context.signal.reason);
+  const deadline = () =>
+    controller.abort(
+      new DocumentError("Document deadline exceeded", "DEADLINE_EXCEEDED")
+    );
   context.signal.addEventListener("abort", abort, { once: true });
-  const timer = setTimeout(abort, Math.max(0, deadlineAt - Date.now()));
-  if (context.signal.aborted || Date.now() >= deadlineAt) abort();
+  const timer = setTimeout(deadline, Math.max(0, deadlineAt - Date.now()));
+  if (context.signal.aborted) abort();
+  else if (Date.now() >= deadlineAt) deadline();
   return {
     signal: controller.signal,
     deadlineAt,
@@ -59,7 +74,12 @@ export function abortable<T>(
       context.signal.removeEventListener("abort", abort);
     };
     const timer = setTimeout(
-      abort,
+      () => {
+        cleanup();
+        reject(
+          new DocumentError("Document deadline exceeded", "DEADLINE_EXCEEDED")
+        );
+      },
       Math.max(0, context.deadlineAt - Date.now())
     );
     context.signal.addEventListener("abort", abort, { once: true });
