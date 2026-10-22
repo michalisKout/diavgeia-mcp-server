@@ -1,7 +1,10 @@
 import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { DiavgeiaApiClient } from "../../api/diavgeia.js";
 import { resolveDocumentLimits } from "../../config.js";
-import { operationScope } from "../../platform/pdf-extractor.js";
+import {
+  isDeadlineExceeded,
+  operationScope,
+} from "../../platform/pdf-extractor.js";
 import {
   createDecisionDetails,
   createDecisionError,
@@ -135,7 +138,7 @@ export function createDecisionTool(
         evidence.extraction.state === "unsupported"
           ? {
               errorCode: scope.signal.aborted
-                ? Date.now() >= scope.deadlineAt
+                ? isDeadlineExceeded(scope)
                   ? "DEADLINE_EXCEEDED"
                   : "ABORTED"
                 : (evidenceService.errorCodeFor(evidence) ?? "DOCUMENT_FAILED"),
@@ -165,7 +168,7 @@ export function createDecisionTool(
         message,
         decision: null,
         errorCode: scope.signal.aborted
-          ? Date.now() >= scope.deadlineAt
+          ? isDeadlineExceeded(scope)
             ? "DEADLINE_EXCEEDED"
             : "ABORTED"
           : "UPSTREAM_ERROR",

@@ -119,19 +119,28 @@ export class WorkPool {
           cleanup();
           resolve();
         };
-        const abort = () => {
+        const stop = (error: unknown) => {
           cleanup();
           this.queue = this.queue.filter((task) => task !== ready);
+          reject(error);
+        };
+        const abort = () => {
           try {
             checkOperation(context);
           } catch (error) {
-            reject(error);
+            stop(error);
             return;
           }
-          reject(new DocumentError("Document operation aborted", "ABORTED"));
+          stop(new DocumentError("Document operation aborted", "ABORTED"));
         };
         const timer = setTimeout(
-          abort,
+          () =>
+            stop(
+              new DocumentError(
+                "Document deadline exceeded",
+                "DEADLINE_EXCEEDED"
+              )
+            ),
           Math.max(0, context.deadlineAt - Date.now())
         );
         this.queue.push(ready);

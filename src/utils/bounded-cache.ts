@@ -1,5 +1,9 @@
 import { DOCUMENT_LIMITS } from "../config.js";
-import { DocumentError, checkOperation } from "../platform/pdf-extractor.js";
+import {
+  DocumentError,
+  checkOperation,
+  isDeadlineExceeded,
+} from "../platform/pdf-extractor.js";
 import type { OperationContext } from "../types/evidence.js";
 
 type Flight<T> = {
@@ -85,7 +89,10 @@ export class BoundedCache<T> {
         current.promise = Promise.reject(error);
       }
       const timer = setTimeout(
-        () => controller.abort(),
+        () =>
+          controller.abort(
+            new DocumentError("Document deadline exceeded", "DEADLINE_EXCEEDED")
+          ),
         DOCUMENT_LIMITS.deadlineMs
       );
       current.promise = current.promise
@@ -141,19 +148,29 @@ export class BoundedCache<T> {
         cleanup();
         action();
       };
-      const abort = () =>
+      const abort = () => {
+        const deadline = isDeadlineExceeded(context);
         finish(() =>
           reject(
             new DocumentError(
-              Date.now() >= context.deadlineAt
+              deadline
                 ? "Document deadline exceeded"
                 : "Document operation aborted",
-              Date.now() >= context.deadlineAt ? "DEADLINE_EXCEEDED" : "ABORTED"
+              deadline ? "DEADLINE_EXCEEDED" : "ABORTED"
             )
           )
         );
+      };
       const timer = setTimeout(
-        abort,
+        () =>
+          finish(() =>
+            reject(
+              new DocumentError(
+                "Document deadline exceeded",
+                "DEADLINE_EXCEEDED"
+              )
+            )
+          ),
         Math.max(0, context.deadlineAt - Date.now())
       );
       context.signal.addEventListener("abort", abort, { once: true });
