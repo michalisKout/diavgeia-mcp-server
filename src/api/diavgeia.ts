@@ -409,6 +409,7 @@ export class DiavgeiaApiClient {
         );
         await new Promise<void>((resolve, reject) => {
           const remaining = context.deadlineAt - Date.now();
+          const retryDelay = Number.isFinite(delay) ? delay : 100;
           const abort = () => {
             clearTimeout(timer);
             reject(
@@ -425,9 +426,18 @@ export class DiavgeiaApiClient {
           const timer = setTimeout(
             () => {
               context.signal.removeEventListener("abort", abort);
-              resolve();
+              // A deadline-capped wait cannot authorize another attempt,
+              // even if the timer wakes just before Date.now() reaches it.
+              if (retryDelay >= remaining)
+                reject(
+                  new SearchError(
+                    "Search deadline exceeded",
+                    "DEADLINE_EXCEEDED"
+                  )
+                );
+              else resolve();
             },
-            Math.min(Number.isFinite(delay) ? delay : 100, remaining)
+            Math.min(retryDelay, remaining)
           );
           context.signal.addEventListener("abort", abort, { once: true });
           if (context.signal.aborted) {
