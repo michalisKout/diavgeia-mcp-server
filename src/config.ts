@@ -144,3 +144,21 @@ export function resolveDefaultDateRange(preset: DateRangePreset) {
     to: dayjs().format("YYYY-MM-DD"),
   };
 }
+
+/** Hard upper bounds for one search operation, shared by all entry points. */
+export const SEARCH_LIMITS = Object.freeze({
+  deadlineMs: 30_000,
+  maxAttempts: 3,
+  retryAfterMs: 2_000,
+  maxWindows: 4,
+  maxPages: 4,
+});
+
+export const searchLimitsSchema = z.object({
+  deadlineMs: z.number().int().min(1).max(SEARCH_LIMITS.deadlineMs),
+  maxAttempts: z.number().int().min(1).max(SEARCH_LIMITS.maxAttempts),
+  retryAfterMs: z.number().int().min(0).max(SEARCH_LIMITS.retryAfterMs),
+  maxWindows: z.number().int().min(1).max(SEARCH_LIMITS.maxWindows),
+  maxPages: z.number().int().min(1).max(SEARCH_LIMITS.maxPages),
+});
+export type SearchLimits = z.infer<typeof searchLimitsSchema>;

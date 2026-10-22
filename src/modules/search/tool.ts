@@ -1,6 +1,7 @@
 import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import dayjs from "dayjs";
 import { DiavgeiaApiClient } from "../../api/diavgeia.js";
+import { SearchError } from "../../api/search-request.js";
 import {
   DEFAULT_CONFIG,
   type ResolvedDiavgeiaConfig,
@@ -8,18 +9,12 @@ import {
 } from "../../config.js";
 import {
   MISSING_Q_PARAMETER,
-  createDetectedOrganizationsInfo,
   createErrorMessage,
   createMissingMinistryParameter,
   createNoResultsFound,
   createSearchResults,
 } from "../../prompts/feedbackToLLM.js";
 import { SEARCH_PROMPT } from "../../prompts/template.js";
-import type {
-  DiavgeiaDecision,
-  DiavgeiaSearchResponse,
-  Organization,
-} from "../../types/diavgeia.js";
 import { OrganizationContext } from "../../utils/context.js";
 import { logger } from "../../utils/logger.js";
 import { createResponse } from "../../utils/response.js";
@@ -37,6 +32,7 @@ export function createSearchDecisionsTool({
   config,
 }: SearchToolDeps): ToolCallback<typeof searchRawSchema> {
   return async ({
+    org,
     q,
     rawQuery,
     subject,
@@ -57,6 +53,7 @@ export function createSearchDecisionsTool({
         !q &&
         !rawQuery &&
         !subject &&
+        !type &&
         !decisionType &&
         !decisionTypes?.length &&
         !thematicCategory
@@ -69,7 +66,7 @@ export function createSearchDecisionsTool({
         });
       }
 
-      const organizationFilter = organizationUid || ministryIdOrName;
+      const organizationFilter = organizationUid || ministryIdOrName || org;
 
       if (!organizationFilter) {
         const organizationsContext =
@@ -88,6 +85,7 @@ export function createSearchDecisionsTool({
         !from_date &&
         !to_date &&
         !subject &&
+        !type &&
         !decisionType &&
         !decisionTypes?.length &&
         !rawQuery &&
@@ -98,100 +96,30 @@ export function createSearchDecisionsTool({
         to_date = dateRange.to;
       }
 
-      let detectedMinistries: Organization[] = [];
-      if (q && organizationFilter && typeof organizationFilter === "string") {
-        detectedMinistries = await orgContext.detectMinistryInQuery(
-          organizationFilter || q
-        );
-      }
-
-      const safeSize = Math.min(
-        Math.max(size ?? config.defaultPageSize, 1),
-        500
-      );
-
+      const safeSize = size ?? config.defaultPageSize;
       const searchParams: DiavgeiaSearchParams = {
-        q: q || undefined,
-        rawQuery: rawQuery || undefined,
-        subject: subject || undefined,
-        ministryIdOrName: organizationFilter || undefined,
-        organizationUid: organizationUid || undefined,
-        unitUid: unitUid || undefined,
-        type: type || undefined,
-        decisionType: decisionType || type || undefined,
-        decisionTypes: decisionTypes || undefined,
-        thematicCategory: thematicCategory || undefined,
-        from_date: from_date || undefined,
-        to_date: to_date || undefined,
+        org,
+        q,
+        rawQuery,
+        subject,
+        ministryIdOrName,
+        organizationUid,
+        unitUid,
+        type,
+        decisionType,
+        decisionTypes,
+        thematicCategory,
+        from_date,
+        to_date,
         page: page ?? 0,
         size: safeSize,
       };
-      const baseSearchPromise = apiClient.searchDecisions(searchParams);
-
-      const ministrySearchPromises: Promise<DiavgeiaSearchResponse>[] = [];
-      if (detectedMinistries.length > 0) {
-        const topMinistries = detectedMinistries.slice(0, 3);
-
-        for (const ministry of topMinistries) {
-          const ministrySearchParams: DiavgeiaSearchParams = {
-            ...searchParams,
-            ministryIdOrName: ministry.uid,
-            size: Math.min(
-              Math.max(Math.floor(safeSize / topMinistries.length), 1),
-              10
-            ),
-          };
-          ministrySearchPromises.push(
-            apiClient.searchDecisions(ministrySearchParams)
-          );
-        }
-      }
-
-      const isOrgRelatedSearch =
-        !organizationFilter &&
-        (q?.toLowerCase().includes("υπουργείο") ||
-          q?.toLowerCase().includes("οργανισμό") ||
-          q?.toLowerCase().includes("δήμο") ||
-          q?.toLowerCase().includes("φορέα") ||
-          detectedMinistries.length > 0);
-
-      const orgContextPromise = isOrgRelatedSearch
-        ? orgContext.generateOrganizationContext()
-        : Promise.resolve("");
-
-      const [baseResponse, ...ministryResponses] = await Promise.all([
-        baseSearchPromise,
-        ...ministrySearchPromises,
-        orgContextPromise,
-      ]);
-
-      const organizationsContext = await orgContextPromise;
-
-      let allDecisions: DiavgeiaDecision[] = [
-        ...(baseResponse.decisions || []),
-      ];
-
-      const seenDecisions = new Set(allDecisions.map((d) => d.ada));
-
-      ministryResponses.forEach((response) => {
-        if (typeof response !== "string" && response?.decisions) {
-          response.decisions.forEach((decision) => {
-            if (!seenDecisions.has(decision.ada)) {
-              allDecisions.push(decision);
-              seenDecisions.add(decision.ada);
-            }
-          });
-        }
-      });
-
-      allDecisions.sort((a, b) => {
-        const dateA = dayjs(a.issueDate).valueOf();
-        const dateB = dayjs(b.issueDate).valueOf();
-        return dateB - dateA;
-      });
-
-      allDecisions = allDecisions.slice(0, safeSize);
-
+      const baseResponse = await apiClient.searchDecisions(searchParams);
+      const allDecisions = baseResponse.decisions.sort(
+        (a, b) => dayjs(b.issueDate).valueOf() - dayjs(a.issueDate).valueOf()
+      );
+      const isOrgRelatedSearch = false;
+      const organizationsContext = "";
       if (allDecisions.length === 0) {
         const message = createNoResultsFound(
           SEARCH_PROMPT,
@@ -200,6 +128,7 @@ export function createSearchDecisionsTool({
         );
         return createResponse(message, "text", {
           status: "empty",
+          coverage: baseResponse.coverage,
           message,
           total: 0,
           decisions: [],
@@ -220,12 +149,7 @@ export function createSearchDecisionsTool({
         issue_date: decision.issueDate,
       }));
 
-      let ministryInfo = "";
-      if (detectedMinistries.length > 0 && !organizationFilter) {
-        ministryInfo = createDetectedOrganizationsInfo(
-          detectedMinistries.map((m) => m.label)
-        );
-      }
+      const ministryInfo = "";
 
       const resultText = createSearchResults(
         allDecisions.length,
@@ -237,15 +161,21 @@ export function createSearchDecisionsTool({
 
       return createResponse(resultText, "text", {
         status: "ok",
+        coverage: baseResponse.coverage,
         message: resultText,
         total: allDecisions.length,
         decisions: structuredDecisions,
       });
     } catch (error) {
-      logger.error(`Error searching decisions: ${error}`);
+      if (!(error instanceof SearchError && error.code === "INVALID_INPUT"))
+        logger.error(`Error searching decisions: ${error}`);
       const message = createErrorMessage((error as Error).message);
       return createResponse(message, "text", {
-        status: "error",
+        status:
+          error instanceof SearchError && error.code === "INVALID_INPUT"
+            ? "needs_input"
+            : "error",
+        errorCode: error instanceof SearchError ? error.code : "SEARCH_FAILED",
         message,
         total: 0,
         decisions: [],
