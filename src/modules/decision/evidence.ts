@@ -228,10 +228,24 @@ export function createDecisionEvidenceService(
             .join("");
           const fetchedAt = new Date().toISOString();
           let result: PdfPages;
+          const extraction = operationScope(shared, limits.extractionMs);
           try {
-            result = await extractor.extract(bytes, shared);
+            checkOperation(extraction);
+            // Await settlement rather than racing the timeout: arbitrary injected
+            // promises cannot be killed, so their pipeline reservation stays held.
+            // The Node extractor uses this scope to terminate its worker first.
+            result = await extractor.extract(bytes, extraction);
+            checkOperation(extraction);
           } catch (error) {
-            throw new ExtractionFailure(error, checksum, fetchedAt);
+            let failure = error;
+            try {
+              checkOperation(extraction);
+            } catch (boundaryError) {
+              failure = boundaryError;
+            }
+            throw new ExtractionFailure(failure, checksum, fetchedAt);
+          } finally {
+            extraction.dispose();
           }
           if (
             !Number.isInteger(result.totalPages) ||
