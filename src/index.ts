@@ -1,6 +1,7 @@
 import { McpAgent } from "agents/mcp";
 import { DiavgeiaMCPServer } from "./mcp-server.js";
 import { SMITHERY_SERVER_CARD } from "./server-card.js";
+import { RequestBodyError, boundedRequest } from "./utils/request-body.js";
 
 export class DiavgeiaMCP extends McpAgent {
   server = new DiavgeiaMCPServer().server;
@@ -61,6 +62,13 @@ export default {
         );
       }
 
+      if (
+        request.method === "POST" &&
+        (url.pathname.startsWith("/sse") || url.pathname.startsWith("/mcp"))
+      ) {
+        request = await boundedRequest(request);
+      }
+
       // Handle SSE endpoint and all sub-paths
       if (url.pathname.startsWith("/sse")) {
         try {
@@ -108,6 +116,10 @@ export default {
         })
       );
     } catch (error) {
+      if (error instanceof RequestBodyError)
+        return addCorsHeaders(
+          new Response(error.message, { status: error.status })
+        );
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       return addCorsHeaders(

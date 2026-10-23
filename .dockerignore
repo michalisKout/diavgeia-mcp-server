@@ -1,0 +1,10 @@
+.git
+.superpowers
+node_modules
+dist
+dist-http
+.wrangler
+.env*
+.dev.vars*
+*.log
+tests

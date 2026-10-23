@@ -1,0 +1,39 @@
+{
+  "status": "ok",
+  "message": "Synthetic verified search result.",
+  "total": 1,
+  "decisions": [
+    {
+      "ada": "TEST-ADA-1",
+      "subject": "Συνθετική απόφαση εκπαιδευτικών.",
+      "issueDate": "2026-09-04",
+      "organization": "test-org",
+      "type": "Synthetic decision type",
+      "url": "https://diavgeia.gov.gr/decision/view/TEST-ADA-1"
+    }
+  ],
+  "coverage": {
+    "contractVersion": 1,
+    "requestedFilters": {
+      "subject": "εκπαιδευτικοί",
+      "organizationUid": "test-org",
+      "page": 0
+    },
+    "appliedFilters": {
+      "subject": "εκπαιδευτικοί",
+      "organizationUid": "test-org",
+      "page": 0
+    },
+    "windows": [
+      {
+        "from": "2026-09-01",
+        "to": "2026-09-30",
+        "complete": true
+      }
+    ],
+    "upstreamTotal": 1,
+    "hasMore": false,
+    "completeness": "complete",
+    "limitations": []
+  }
+}

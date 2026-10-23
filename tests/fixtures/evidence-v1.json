@@ -1,0 +1,43 @@
+{
+  "coverage": {
+    "contractVersion": 1,
+    "requestedFilters": {
+      "subject": "εκπαιδευτικοί",
+      "organizationUid": "test-org",
+      "page": 0
+    },
+    "appliedFilters": {
+      "subject": "εκπαιδευτικοί",
+      "organizationUid": "test-org",
+      "page": 0
+    },
+    "windows": [{ "from": "2026-09-01", "to": "2026-09-30", "complete": true }],
+    "upstreamTotal": 1,
+    "hasMore": false,
+    "completeness": "complete",
+    "limitations": []
+  },
+  "evidence": {
+    "contractVersion": 1,
+    "ada": "TEST-ADA-1",
+    "fetchedAt": "2026-10-22T10:00:00.000Z",
+    "version": "1",
+    "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "publicationStatus": "published",
+    "extraction": {
+      "state": "native",
+      "totalPages": 2,
+      "extractedPages": [1, 2],
+      "unreadablePages": [],
+      "searchedPages": [1, 2],
+      "limitations": []
+    },
+    "excerpts": [
+      {
+        "id": "TEST-ADA-1-p2-1",
+        "page": 2,
+        "text": "Συνθετικό απόσπασμα δοκιμής εκπαιδευτικών."
+      }
+    ]
+  }
+}

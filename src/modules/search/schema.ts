@@ -1,6 +1,56 @@
 import { z } from "zod";
 
+function normalizeDate(
+  value: string | number | null | undefined,
+  ctx: z.RefinementCtx
+) {
+  if (value == null || `${value}`.trim() === "") return undefined;
+  const raw = `${value}`.trim();
+  const date = /^\d{11,13}$/.test(raw)
+    ? new Date(Number(raw))
+    : new Date(`${raw}T00:00:00Z`);
+  const result = Number.isFinite(date.getTime())
+    ? date.toISOString().slice(0, 10)
+    : "";
+  if (!result || (!/^\d{11,13}$/.test(raw) && result !== raw)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Invalid issue date; use YYYY-MM-DD or epoch milliseconds",
+    });
+    return z.NEVER;
+  }
+  return result;
+}
+const dateInput = z
+  .union([z.string(), z.number()])
+  .nullable()
+  .optional()
+  .transform(normalizeDate);
+function integerInput(min: number) {
+  return z
+    .union([z.string(), z.number()])
+    .optional()
+    .transform((value, ctx) => {
+      if (value === undefined || `${value}`.trim() === "") return undefined;
+      const number = Number(value);
+      if (min === 1 && Number.isFinite(number) && number >= 1)
+        return Math.min(Math.floor(number), 500);
+      if (!Number.isSafeInteger(number) || number < min) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Expected a finite integer >= ${min}`,
+        });
+        return z.NEVER;
+      }
+      return min === 1 ? Math.min(number, 500) : number;
+    });
+}
+
 export const searchRawSchema = {
+  org: z
+    .string()
+    .optional()
+    .describe("Legacy organization alias; exact UID or Latin name."),
   q: z
     .union([z.string(), z.number()])
     .nullable()
@@ -15,7 +65,7 @@ export const searchRawSchema = {
     .optional()
     .transform((val) => val?.toString()?.trim())
     .describe(
-      'Raw Diavgeia advanced query expression. Maps directly to query=..., e.g. thematicCategory:"ΑΠΑΣΧΟΛΗΣΗ ΚΑΙ ΕΡΓΑΣΙΑ" or q:"ΠΕ60".'
+      'Raw Diavgeia advanced query expression. Composed into /search/advanced?q=..., e.g. thematicCategory:"ΑΠΑΣΧΟΛΗΣΗ ΚΑΙ ΕΡΓΑΣΙΑ" or q:"ΠΕ60".'
     ),
   subject: z
     .union([z.string(), z.number()])
@@ -23,7 +73,7 @@ export const searchRawSchema = {
     .optional()
     .transform((val) => val?.toString()?.trim())
     .describe(
-      'Exact or phrase subject filter. Maps to Diavgeia fq=subject:"..." for precise searches.'
+      'Exact or phrase subject filter. Advanced subject clause subject:"..." for precise searches.'
     ),
   ministryIdOrName: z
     .union([z.string(), z.number()])
@@ -31,7 +81,7 @@ export const searchRawSchema = {
     .optional()
     .transform((val) => val?.toString()?.trim())
     .describe(
-      "Organization ID or name - will be automatically detected from ministry name if not provided. Use organization context to find valid IDs."
+      "Organization UID or exact ministry name/Latin name. Unknown or ambiguous names require an exact UID; no fuzzy organization expansion."
     ),
   organizationUid: z
     .union([z.string(), z.number()])
@@ -39,21 +89,21 @@ export const searchRawSchema = {
     .optional()
     .transform((val) => val?.toString()?.trim())
     .describe(
-      'Exact Diavgeia organization UID. Maps to Diavgeia fq=organizationUid:"...".'
+      'Exact Diavgeia organization UID. Advanced clause organizationUid:"...".'
     ),
   unitUid: z
     .union([z.string(), z.number()])
     .nullable()
     .optional()
     .transform((val) => val?.toString()?.trim())
-    .describe('Exact Diavgeia unit UID. Maps to Diavgeia fq=unitUid:"...".'),
+    .describe('Exact Diavgeia unit UID. Advanced clause unitUid:"...".'),
   type: z
     .union([z.string(), z.number()])
     .nullable()
     .optional()
-    .transform((val) => val?.toString())
+    .transform((val) => val?.toString()?.trim())
     .describe(
-      "Decision type identifier (e.g., 'Β.1.1' for appointments, 'Β.2.1' for budgets)"
+      "Decision type UID alias (e.g., '2.4.7.1'); known labels resolve through official metadata."
     ),
   decisionType: z
     .union([z.string(), z.number()])
@@ -61,7 +111,7 @@ export const searchRawSchema = {
     .optional()
     .transform((val) => val?.toString()?.trim())
     .describe(
-      'Exact Diavgeia decision type label or query expression. Maps to q=decisionType:"...".'
+      'Exact Diavgeia decision type UID or label. Resolved through official type metadata; advanced clause decisionTypeUid:"...".'
     ),
   decisionTypes: z
     .array(z.union([z.string(), z.number()]))
@@ -69,11 +119,11 @@ export const searchRawSchema = {
     .optional()
     .transform((val) =>
       val
-        ?.map((item) => item.toString())
+        ?.map((item) => item.toString().trim())
         .filter((item) => item.trim().length > 0)
     )
     .describe(
-      'Multiple Diavgeia decision type labels. Maps to fq=decisionType:["...", "..."].'
+      "Multiple Diavgeia decision type labels. Resolved through official type metadata; alternatives use grouped decisionTypeUid clauses with OR."
     ),
   thematicCategory: z
     .union([z.string(), z.number()])
@@ -81,55 +131,16 @@ export const searchRawSchema = {
     .optional()
     .transform((val) => val?.toString()?.trim())
     .describe(
-      'Exact thematic category label. Maps to Diavgeia query=thematicCategory:"...".'
+      'Exact thematic category label. Advanced clause thematicCategory:"...".'
     ),
-  from_date: z
-    .union([z.string(), z.number()])
-    .nullable()
-    .optional()
-    .transform((val) => {
-      if (val === null || val === undefined) return undefined;
-      const stringValue = val.toString().trim();
-      return stringValue.length > 0 ? stringValue : undefined;
-    })
-    .describe(
-      "Start date in YYYY-MM-DD format. Accepts natural language dates like 'last year', 'this year', 'January 2024' and converts them to ISO 8601 format for searching Diavgeia decisions."
-    ),
-  to_date: z
-    .union([z.string(), z.number()])
-    .nullable()
-    .optional()
-    .transform((val) => {
-      if (val === null || val === undefined) return undefined;
-      const stringValue = val.toString().trim();
-      return stringValue.length > 0 ? stringValue : undefined;
-    })
-    .describe(
-      "End date in YYYY-MM-DD format. Accepts natural language dates like 'today', 'December 2024' and converts them to ISO 8601 format for searching Diavgeia decisions."
-    ),
-  page: z
-    .union([z.string(), z.number()])
-    .optional()
-    .transform((val) => {
-      if (val === undefined || val === null || `${val}`.trim() === "")
-        return undefined;
-      const convertedVal = Number(val);
-      if (Number.isNaN(convertedVal) || convertedVal < 0) return 0;
-      return Math.floor(convertedVal);
-    })
-    .describe("Page number for pagination (starts from 0, default: 0)"),
-  size: z
-    .union([z.string(), z.number()])
-    .optional()
-    .transform((val) => {
-      if (val === undefined || val === null || `${val}`.trim() === "")
-        return undefined;
-      const convertedVal = Number(val);
-      if (Number.isNaN(convertedVal) || convertedVal < 1) return undefined;
-      if (convertedVal > 500) return 500;
-      return Math.floor(convertedVal);
-    })
-    .describe("Results per page (minimum: 1, maximum: 500, default: 10)"),
+  from_date: dateInput.describe(
+    "Issue-date start: YYYY-MM-DD or epoch milliseconds."
+  ),
+  to_date: dateInput.describe(
+    "Issue-date end: YYYY-MM-DD or epoch milliseconds."
+  ),
+  page: integerInput(0).describe("Zero-based page number."),
+  size: integerInput(1).describe("Results per response, capped at 500."),
 };
 
 export const searchSchema = z.object(searchRawSchema);
@@ -137,6 +148,25 @@ export const searchSchema = z.object(searchRawSchema);
 export type DiavgeiaSearchParams = z.infer<typeof searchSchema>;
 
 export const searchOutputRawSchema = {
+  errorCode: z.string().optional(),
+  coverage: z
+    .object({
+      contractVersion: z.literal(1),
+      requestedFilters: z.record(
+        z.union([z.string(), z.array(z.string()), z.number()])
+      ),
+      appliedFilters: z.record(
+        z.union([z.string(), z.array(z.string()), z.number()])
+      ),
+      windows: z.array(
+        z.object({ from: z.string(), to: z.string(), complete: z.boolean() })
+      ),
+      upstreamTotal: z.number().nullable(),
+      hasMore: z.boolean().nullable(),
+      completeness: z.enum(["complete", "limited", "unknown"]),
+      limitations: z.array(z.string()),
+    })
+    .optional(),
   status: z
     .enum(["ok", "needs_input", "empty", "error"])
     .describe("Machine-readable status of the search result."),

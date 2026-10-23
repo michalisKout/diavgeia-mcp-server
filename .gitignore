@@ -143,3 +143,5 @@ ehthumbs.db
 Thumbs.db
 
 .wrangler
+# Optional Node HTTP build
+dist-http/

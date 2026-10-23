@@ -6,6 +6,7 @@ import {
   createOrganizationContext,
 } from "../prompts/feedbackToLLM.js";
 import type { Organization } from "../types/diavgeia.js";
+import type { OperationContext } from "../types/evidence.js";
 import { normalizeQuery } from "./text.js";
 
 export class OrganizationContext {
@@ -51,14 +52,16 @@ export class OrganizationContext {
     }
   }
 
-  public async getOrganizations(): Promise<Organization[]> {
+  public async getOrganizations(
+    context?: OperationContext
+  ): Promise<Organization[]> {
     if (!this.cacheEnabled) {
-      return await this.apiClient.getOrganizations();
+      return await this.apiClient.getOrganizations(context);
     }
 
     if (this.organizations.length === 0) {
       try {
-        this.organizations = await this.apiClient.getOrganizations();
+        this.organizations = await this.apiClient.getOrganizations(context);
       } catch (error) {
         console.error("Failed to fetch organizations:", error);
         if (this.organizations.length > 0) {
@@ -104,9 +107,11 @@ export class OrganizationContext {
     }
   }
 
-  public async generateOrganizationContext(): Promise<string> {
+  public async generateOrganizationContext(
+    context?: OperationContext
+  ): Promise<string> {
     try {
-      const organizations = await this.getOrganizations();
+      const organizations = await this.getOrganizations(context);
       const topOrgs = organizations.slice(0, this.maxOrganizations);
 
       if (topOrgs.length === 0) return NO_ORGANIZATION_DATA;

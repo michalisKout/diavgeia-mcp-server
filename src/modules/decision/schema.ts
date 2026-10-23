@@ -1,6 +1,44 @@
 import { z } from "zod";
 
+export const documentEvidenceSchema = z.object({
+  contractVersion: z.literal(1),
+  ada: z.string(),
+  fetchedAt: z.string().datetime(),
+  version: z.string().nullable(),
+  checksum: z.string().nullable(),
+  publicationStatus: z.string(),
+  extraction: z.object({
+    state: z.enum([
+      "native",
+      "partial",
+      "ocr_needed",
+      "missing",
+      "unsupported",
+      "failed",
+    ]),
+    totalPages: z.number().int().min(1).max(200).nullable(),
+    extractedPages: z.array(z.number().int().min(1).max(200)),
+    unreadablePages: z.array(z.number().int().min(1).max(200)),
+    searchedPages: z.array(z.number().int().min(1).max(200)),
+    limitations: z.array(z.string()),
+  }),
+  excerpts: z
+    .array(
+      z.object({
+        id: z.string(),
+        page: z.number().int().min(1).max(200),
+        text: z.string().max(1200),
+      })
+    )
+    .max(6),
+});
 export const decisionRawSchema = {
+  query: z
+    .string()
+    .max(500)
+    .optional()
+    .describe("Optional relevance query; all readable pages are searched."),
+  maxExcerpts: z.number().int().min(1).max(6).optional(),
   ada: z
     .string()
     .nullable()
@@ -10,6 +48,8 @@ export const decisionRawSchema = {
 };
 
 export const decisionOutputRawSchema = {
+  evidence: documentEvidenceSchema.optional(),
+  errorCode: z.string().optional(),
   found: z
     .boolean()
     .describe("Whether a decision was found for the requested ADA."),

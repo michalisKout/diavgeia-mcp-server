@@ -4,7 +4,7 @@
     "outDir": "./dist",
     "lib": ["es2022"],
     "module": "es2022",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "allowJs": true,
     "checkJs": false,
@@ -22,6 +22,7 @@
   "files": ["src/local.ts"],
   "include": [
     "src/modules/**/*.ts",
+    "src/platform/**/*.ts",
     "src/api/**/*.ts",
     "src/types/**/*.ts",
     "src/utils/**/*.ts",

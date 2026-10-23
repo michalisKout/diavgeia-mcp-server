@@ -66,19 +66,40 @@ async function startDiavgeiaApiStub() {
         searchParams: requestUrl.searchParams,
       });
 
-      if (requestUrl.pathname === "/search") {
+      if (requestUrl.pathname === "/types.json") {
+        writeJson(response, {
+          decisionTypes: [
+            { uid: "2.4.7.1", label: "ΛΟΙΠΕΣ ΑΤΟΜΙΚΕΣ ΔΙΟΙΚΗΤΙΚΕΣ ΠΡΑΞΕΙΣ" },
+          ],
+        });
+        return;
+      }
+      if (
+        requestUrl.pathname === "/search" ||
+        requestUrl.pathname === "/search/advanced"
+      ) {
+        const expression = requestUrl.searchParams.get("q") ?? "";
+        const organizationUid =
+          /organizationUid:"([^"]+)"/.exec(expression)?.[1] ??
+          requestUrl.searchParams.get("org") ??
+          "100001";
+        const typeUid =
+          /decisionTypeUid:"([^"]+)"/.exec(expression)?.[1] ?? "Β.2.2";
         writeJson(response, {
           decisions: [
             {
               ada: "ΨΧ465Κ8Ω-123",
               subject: "Προμήθεια εκπαιδευτικού εξοπλισμού",
-              issueDate: "2026-06-30",
+              issueDate:
+                requestUrl.searchParams.get("from_issue_date") ??
+                /issueDate:\[DT\((\d{4}-\d{2}-\d{2})/.exec(expression)?.[1] ??
+                "2026-06-30",
               organization: {
-                uid: "100001",
+                uid: organizationUid,
                 label: "Υπουργείο Παιδείας",
               },
               decisionType: {
-                uid: "Β.2.2",
+                uid: typeUid,
                 label: "Procurement contracts",
               },
               documentUrl: "",
@@ -96,7 +117,7 @@ async function startDiavgeiaApiStub() {
           ada: "ΨΧ465Κ8Ω-123",
           subject: "Προμήθεια εκπαιδευτικού εξοπλισμού",
           protocolNumber: "42/2026",
-          issueDate: "2026-06-30",
+          issueDate: 1788480000000,
           status: "published",
           organizationId: "100001",
           organizationName: "Υπουργείο Παιδείας",
@@ -278,17 +299,22 @@ describe("Diavgeia MCP server usage flows", () => {
       (request) => request.pathname === "/search"
     );
     expect(searchRequest?.searchParams.get("size")).toBe("2");
-    expect(searchRequest?.searchParams.get("q")).toBe(
+    expect(searchRequest?.searchParams.get("term")).toBe(
       "εκπαιδευτικός εξοπλισμός"
     );
-    expect(searchRequest?.searchParams.getAll("fq")).toEqual(
-      expect.arrayContaining([
-        'organizationUid:"100001"',
-        expect.stringMatching(
-          /^issueDate:\[\d{4}-\d{2}-\d{2} TO \d{4}-\d{2}-\d{2}\]$/
-        ),
-      ])
+    expect(searchRequest?.searchParams.get("org")).toBe("100001");
+    expect(searchRequest?.searchParams.get("from_issue_date")).toMatch(
+      /^\d{4}-\d{2}-\d{2}$/
     );
+    expect(result.structuredContent).toHaveProperty(
+      "coverage.completeness",
+      "limited"
+    );
+    expect(
+      apiStub.requests.filter((request) =>
+        request.pathname.startsWith("/search")
+      )
+    ).toHaveLength(1);
   });
 
   it("maps precise decision search arguments to Diavgeia search filters", async () => {
@@ -308,15 +334,12 @@ describe("Diavgeia MCP server usage flows", () => {
     expect(responseText).toContain("Procurement contracts");
 
     const searchRequest = apiStub.requests.find(
-      (request) => request.pathname === "/search"
+      (request) => request.pathname === "/search/advanced"
     );
-    expect(searchRequest?.searchParams.getAll("fq")).toEqual([
-      'subject:"Διαπίστωση λύσης σύμβασης εργασίας λόγω παραίτησης"',
-      'organizationUid:"100081880"',
-    ]);
     expect(searchRequest?.searchParams.get("q")).toBe(
-      'decisionType:"ΛΟΙΠΕΣ ΑΤΟΜΙΚΕΣ ΔΙΟΙΚΗΤΙΚΕΣ ΠΡΑΞΕΙΣ"'
+      '(subject:"Διαπίστωση λύσης σύμβασης εργασίας λόγω παραίτησης") AND (organizationUid:"100081880") AND (decisionTypeUid:"2.4.7.1")'
     );
+    expect(searchRequest?.searchParams.has("fq")).toBe(false);
     expect(searchRequest?.searchParams.get("sort")).toBe("relative");
   });
 
@@ -334,17 +357,12 @@ describe("Diavgeia MCP server usage flows", () => {
 
     expect(textContent(result)).toContain("ΨΧ465Κ8Ω-123");
     const searchRequest = apiStub.requests.find(
-      (request) => request.pathname === "/search"
+      (request) => request.pathname === "/search/advanced"
     );
-    expect(searchRequest?.searchParams.get("query")).toBe(
-      'thematicCategory:"ΑΠΑΣΧΟΛΗΣΗ ΚΑΙ ΕΡΓΑΣΙΑ"'
+    expect(searchRequest?.searchParams.get("q")).toBe(
+      '(subject:"Προσλήψεις") AND (organizationUid:"100081880") AND (unitUid:"100038330") AND (thematicCategory:"ΑΠΑΣΧΟΛΗΣΗ ΚΑΙ ΕΡΓΑΣΙΑ")'
     );
-    expect(searchRequest?.searchParams.getAll("fq")).toEqual([
-      'subject:"Προσλήψεις"',
-      'organizationUid:"100081880"',
-      'unitUid:"100038330"',
-    ]);
-    expect(searchRequest?.searchParams.has("advanced")).toBe(true);
+    expect(searchRequest?.searchParams.has("advanced")).toBe(false);
   });
 
   it("maps raw query and multi-value decision type filters to Diavgeia advanced search params", async () => {
@@ -352,7 +370,7 @@ describe("Diavgeia MCP server usage flows", () => {
       name: SEARCH_DECISIONS_TOOL_NAME,
       arguments: {
         rawQuery: 'q:"ΠΕ60"',
-        decisionTypes: ["ΠΙΝΑΚΕΣ ΕΠΙΤΥΧΟΝΤΩΝ", " ΔΙΟΡΙΣΤΕΩΝ & ΕΠΙΛΑΧΟΝΤΩΝ"],
+        decisionTypes: ["2.4.7.1", "2.4.7.2"],
         organizationUid: "7452",
         unitUid: "76013",
         page: 0,
@@ -361,15 +379,52 @@ describe("Diavgeia MCP server usage flows", () => {
 
     expect(textContent(result)).toContain("ΨΧ465Κ8Ω-123");
     const searchRequest = apiStub.requests.find(
-      (request) => request.pathname === "/search"
+      (request) => request.pathname === "/search/advanced"
     );
-    expect(searchRequest?.searchParams.get("query")).toBe('q:"ΠΕ60"');
-    expect(searchRequest?.searchParams.getAll("fq")).toEqual([
-      'decisionType:["ΠΙΝΑΚΕΣ ΕΠΙΤΥΧΟΝΤΩΝ"," ΔΙΟΡΙΣΤΕΩΝ & ΕΠΙΛΑΧΟΝΤΩΝ"]',
-      'organizationUid:"7452"',
-      'unitUid:"76013"',
-    ]);
-    expect(searchRequest?.searchParams.has("advanced")).toBe(true);
+    expect(searchRequest?.searchParams.get("q")).toBe(
+      '(q:"ΠΕ60") AND (organizationUid:"7452") AND (unitUid:"76013") AND ((decisionTypeUid:"2.4.7.1" OR decisionTypeUid:"2.4.7.2"))'
+    );
+    expect(searchRequest?.searchParams.has("fq")).toBe(false);
+  });
+
+  it("preserves type-only aliases and numeric public dates through the MCP tool", async () => {
+    const result = await client.callTool({
+      name: SEARCH_DECISIONS_TOOL_NAME,
+      arguments: {
+        type: "2.4.7.1",
+        organizationUid: "100081880",
+        from_date: 1788220800000,
+        to_date: "2026-09-30",
+      },
+    });
+    expect(result.structuredContent).toMatchObject({ status: "ok", total: 1 });
+    const search = apiStub.requests.find(
+      (request) => request.pathname === "/search/advanced"
+    );
+    expect(search?.searchParams.get("q")).toContain(
+      'decisionTypeUid:"2.4.7.1"'
+    );
+    expect(search?.searchParams.get("q")).toContain(
+      "issueDate:[DT(2026-09-01T00:00:00) TO DT(2026-09-30T23:59:59)]"
+    );
+  });
+  it("returns needs_input for conflicting aliases without broadening the organization", async () => {
+    const result = await client.callTool({
+      name: SEARCH_DECISIONS_TOOL_NAME,
+      arguments: {
+        q: "synthetic",
+        organizationUid: "100081880",
+        ministryIdOrName: "200",
+      },
+    });
+    expect(result.structuredContent).toMatchObject({
+      status: "needs_input",
+      errorCode: "INVALID_INPUT",
+      total: 0,
+    });
+    expect(
+      apiStub.requests.some((request) => request.pathname.startsWith("/search"))
+    ).toBe(false);
   });
 
   it("retrieves a decision detail through the MCP tool", async () => {
@@ -389,6 +444,7 @@ describe("Diavgeia MCP server usage flows", () => {
       decision: {
         ada: "ΨΧ465Κ8Ω-123",
         subject: "Προμήθεια εκπαιδευτικού εξοπλισμού",
+        issueDate: "2026-09-04",
       },
     });
   });

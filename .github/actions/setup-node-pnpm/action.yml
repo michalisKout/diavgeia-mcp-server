@@ -9,7 +9,7 @@ inputs:
   pnpm-version:
     description: "pnpm version to use"
     required: false
-    default: "10"
+    default: "10.24.0"
   frozen-lockfile:
     description: "Use frozen lockfile for installation"
     required: false
@@ -45,7 +45,7 @@ runs:
       shell: bash
       run: |
         if [ "${{ inputs.frozen-lockfile }}" = "true" ]; then
-          pnpm install --frozen-lockfile
+          pnpm install --frozen-lockfile --ignore-scripts
         else
-          pnpm install
+          pnpm install --ignore-scripts
         fi

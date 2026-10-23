@@ -1,3 +1,4 @@
+import type { SearchCoverage } from "./evidence.js";
 /**
  * Search parameters for the Diavgeia API
  */
@@ -15,6 +16,7 @@ export interface DiavgeiaSearchParams {
  * Response structure for search results
  */
 export interface DiavgeiaSearchResponse {
+  coverage?: SearchCoverage;
   total: number;
   decisions: DiavgeiaDecision[];
 }
@@ -23,6 +25,8 @@ export interface DiavgeiaSearchResponse {
  * Structure of a Diavgeia Decision
  */
 export interface DiavgeiaDecision {
+  versionId?: string;
+  documentChecksum?: string | null;
   ada: string; // Unique ID for the decision
   subject: string; // Subject of the decision
   protocolNumber: string; // Protocol number

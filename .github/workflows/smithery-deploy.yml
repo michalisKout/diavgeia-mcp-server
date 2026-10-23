@@ -41,6 +41,12 @@ jobs:
             exit 1
           fi
 
+      - name: Build optional HTTP server
+        run: pnpm run build:http
+
+      - name: Verify Worker bundle
+        run: pnpm exec wrangler deploy --dry-run
+
       - name: Run tests
         run: pnpm run test
 
